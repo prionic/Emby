@@ -1,4 +1,4 @@
-﻿define(['paperdialoghelper', 'paper-fab', 'paper-item-body', 'paper-icon-item'], function (paperDialogHelper) {
+﻿define(['dialogHelper', 'jQuery', 'emby-button', 'paper-item-body', 'paper-icon-item', 'paper-icon-button-light'], function (dialogHelper, $) {
 
     var currentDeferred;
     var hasChanges;
@@ -17,7 +17,9 @@
 
         }, function () {
 
-            Dashboard.alert(Globalize.translate('ErrorAddingMediaPathToVirtualFolder'));
+            require(['toast'], function (toast) {
+                toast(Globalize.translate('ErrorAddingMediaPathToVirtualFolder'));
+            });
         });
     }
 
@@ -30,9 +32,9 @@
 
         var location = virtualFolder.Locations[index];
 
-        Dashboard.confirm(Globalize.translate('MessageConfirmRemoveMediaLocation'), Globalize.translate('HeaderRemoveMediaLocation'), function (confirmResult) {
+        require(['confirm'], function (confirm) {
 
-            if (confirmResult) {
+            confirm(Globalize.translate('MessageConfirmRemoveMediaLocation'), Globalize.translate('HeaderRemoveMediaLocation')).then(function () {
 
                 var refreshAfterChange = currentOptions.refresh;
 
@@ -43,9 +45,11 @@
 
                 }, function () {
 
-                    Dashboard.alert(Globalize.translate('DefaultErrorMessage'));
+                    require(['toast'], function (toast) {
+                        toast(Globalize.translate('DefaultErrorMessage'));
+                    });
                 });
-            }
+            });
         });
     }
 
@@ -55,13 +59,13 @@
 
         html += '<paper-icon-item role="menuitem" class="lnkPath">';
 
-        html += '<paper-fab mini style="background:#52B54B;" icon="folder" item-icon></paper-fab>';
+        html += '<button type="button" is="emby-button" style="background:#52B54B;" class="fab mini" item-icon><iron-icon icon="folder"></iron-icon></button>';
 
         html += '<paper-item-body>';
         html += path;
         html += '</paper-item-body>';
 
-        html += '<paper-icon-button icon="remove-circle" class="btnRemovePath" data-index="' + index + '"></paper-icon-button>';
+        html += '<button is="paper-icon-button-light" class="btnRemovePath" data-index="' + index + '"><iron-icon icon="remove-circle"></iron-icon></button>';
 
         html += '</paper-icon-item>';
 
@@ -134,7 +138,7 @@
 
         self.show = function (options) {
 
-            var deferred = DeferredBuilder.Deferred();
+            var deferred = jQuery.Deferred();
 
             currentOptions = options;
             currentDeferred = deferred;
@@ -146,7 +150,7 @@
             xhr.onload = function (e) {
 
                 var template = this.response;
-                var dlg = paperDialogHelper.createDialog({
+                var dlg = dialogHelper.createDialog({
                     size: 'small',
 
                     // In (at least) chrome this is causing the text field to not be editable
@@ -159,7 +163,7 @@
 
                 var html = '';
                 html += '<h2 class="dialogHeader">';
-                html += '<paper-fab icon="arrow-back" mini class="btnCloseDialog" tabindex="-1"></paper-fab>';
+                html += '<button type="button" is="emby-button" icon="arrow-back" class="fab mini btnCloseDialog" tabindex="-1"><iron-icon icon="arrow-back"></iron-icon></button>';
 
                 html += '<div style="display:inline-block;margin-left:.6em;vertical-align:middle;">' + options.library.Name + '</div>';
                 html += '</h2>';
@@ -174,13 +178,13 @@
                 var editorContent = dlg.querySelector('.editorContent');
                 initEditor(editorContent, options);
 
-                $(dlg).on('iron-overlay-closed', onDialogClosed);
+                $(dlg).on('close', onDialogClosed);
 
-                paperDialogHelper.open(dlg);
+                dialogHelper.open(dlg);
 
                 $('.btnCloseDialog', dlg).on('click', function () {
 
-                    paperDialogHelper.close(dlg);
+                    dialogHelper.close(dlg);
                 });
 
                 refreshLibraryFromServer(editorContent);

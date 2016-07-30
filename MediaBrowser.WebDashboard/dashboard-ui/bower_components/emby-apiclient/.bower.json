@@ -16,14 +16,14 @@
   },
   "devDependencies": {},
   "ignore": [],
-  "version": "1.0.37",
-  "_release": "1.0.37",
+  "version": "1.1.70",
+  "_release": "1.1.70",
   "_resolution": {
     "type": "version",
-    "tag": "1.0.37",
-    "commit": "b383fff379b92417525a3295ebbe3b7db9e0b1a4"
+    "tag": "1.1.70",
+    "commit": "7d03528fbb6d397ae53032e72e6230606e043b90"
   },
-  "_source": "git://github.com/MediaBrowser/Emby.ApiClient.Javascript.git",
-  "_target": "~1.0.3",
+  "_source": "https://github.com/MediaBrowser/Emby.ApiClient.Javascript.git",
+  "_target": "^1.1.51",
   "_originalSource": "emby-apiclient"
 }

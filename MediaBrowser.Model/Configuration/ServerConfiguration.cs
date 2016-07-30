@@ -63,10 +63,10 @@ namespace MediaBrowser.Model.Configuration
         public bool IsPortAuthorized { get; set; }
 
         /// <summary>
-        /// Gets or sets the item by name path.
+        /// Gets or sets a value indicating whether [enable case sensitive item ids].
         /// </summary>
-        /// <value>The item by name path.</value>
-        public string ItemsByNamePath { get; set; }
+        /// <value><c>true</c> if [enable case sensitive item ids]; otherwise, <c>false</c>.</value>
+        public bool EnableCaseSensitiveItemIds { get; set; }
 
         /// <summary>
         /// Gets or sets the metadata path.
@@ -85,12 +85,6 @@ namespace MediaBrowser.Model.Configuration
         /// </summary>
         /// <value><c>true</c> if [save local meta]; otherwise, <c>false</c>.</value>
         public bool SaveLocalMeta { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether [enable localized guids].
-        /// </summary>
-        /// <value><c>true</c> if [enable localized guids]; otherwise, <c>false</c>.</value>
-        public bool EnableLocalizedGuids { get; set; }
 
         /// <summary>
         /// Gets or sets the preferred metadata language.
@@ -161,7 +155,7 @@ namespace MediaBrowser.Model.Configuration
         /// </summary>
         /// <value>The dashboard source path.</value>
         public string DashboardSourcePath { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the image saving convention.
         /// </summary>
@@ -182,8 +176,6 @@ namespace MediaBrowser.Model.Configuration
         public PeopleMetadataOptions PeopleMetadataOptions { get; set; }
         public bool FindInternetTrailers { get; set; }
 
-        public string[] InsecureApps9 { get; set; }
-
         public bool SaveMetadataHidden { get; set; }
 
         public NameValuePair[] ContentTypes { get; set; }
@@ -192,26 +184,38 @@ namespace MediaBrowser.Model.Configuration
         public bool EnableVideoArchiveFiles { get; set; }
         public int RemoteClientBitrateLimit { get; set; }
 
-        public bool DenyIFrameEmbedding { get; set; }
-
         public AutoOnOff EnableLibraryMonitor { get; set; }
 
         public int SharingExpirationDays { get; set; }
 
-        public bool EnableWindowsShortcuts { get; set; }
-
-        public bool EnableDateLastRefresh { get; set; }
-
         public string[] Migrations { get; set; }
 
         public int MigrationVersion { get; set; }
+        public int SchemaVersion { get; set; }
+        public int SqliteCacheSize { get; set; }
+
+        public bool DownloadImagesInAdvance { get; set; }
+
+        public bool EnableAnonymousUsageReporting { get; set; }
+        public bool EnableStandaloneMusicKeys { get; set; }
+        public bool EnableLocalizedGuids { get; set; }
+        public bool EnableFolderView { get; set; }
+        public bool EnableGroupingIntoCollections { get; set; }
+        public bool DisplaySpecialsWithinSeasons { get; set; }
+        public bool DisplayCollectionsView { get; set; }
+        public string[] LocalNetworkAddresses { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ServerConfiguration" /> class.
         /// </summary>
         public ServerConfiguration()
         {
+            LocalNetworkAddresses = new string[] { };
             Migrations = new string[] { };
+            SqliteCacheSize = 0;
+
+            EnableLocalizedGuids = true;
+            DisplaySpecialsWithinSeasons = true;
 
             ImageSavingConvention = ImageSavingConvention.Compatible;
             PublicPort = 8096;
@@ -221,12 +225,11 @@ namespace MediaBrowser.Model.Configuration
             EnableHttps = false;
             EnableDashboardResponseCaching = true;
             EnableDashboardResourceMinification = true;
+            EnableAnonymousUsageReporting = true;
 
             EnableAutomaticRestart = true;
-            DenyIFrameEmbedding = true;
 
             EnableUPnP = true;
-
             SharingExpirationDays = 30;
             MinResumePct = 5;
             MaxResumePct = 90;
@@ -255,11 +258,6 @@ namespace MediaBrowser.Model.Configuration
             UICulture = "en-us";
 
             PeopleMetadataOptions = new PeopleMetadataOptions();
-
-            InsecureApps9 = new[]
-            {
-                "Windows Phone"
-            };
 
             MetadataOptions = new[]
             {

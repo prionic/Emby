@@ -21,8 +21,8 @@ namespace MediaBrowser.Dlna.Profiles
                     new HttpHeaderInfo
                     {
                         Name = "User-Agent",
-                        Value = @"SEC_",
-                        Match = HeaderMatchType.Substring
+                        Value = @".*(SEC_HHP_\[TV\] [A-Z]{2}\d{2}J[A-Z]?\d{3,4})*.",
+                        Match = HeaderMatchType.Regex
                     }
                 }
             };
@@ -119,8 +119,7 @@ namespace MediaBrowser.Dlna.Profiles
                 },
                 new DirectPlayProfile
                 {
-                    Container = "mp3",
-                    AudioCodec = "mp3",
+                    Container = "mp3,flac",
                     Type = DlnaProfileType.Audio
                 },
                 new DirectPlayProfile

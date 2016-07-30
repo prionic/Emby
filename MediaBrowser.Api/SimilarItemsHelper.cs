@@ -9,6 +9,8 @@ using ServiceStack;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using MediaBrowser.Model.Dto;
 
 namespace MediaBrowser.Api
 {
@@ -23,6 +25,8 @@ namespace MediaBrowser.Api
         /// <value>The id.</value>
         [ApiMember(Name = "Id", Description = "Item Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
         public string Id { get; set; }
+
+        public string ExcludeArtistIds { get; set; }
     }
 
     public class BaseGetSimilarItems : IReturn<ItemsResult>, IHasItemFields
@@ -54,21 +58,7 @@ namespace MediaBrowser.Api
     /// </summary>
     public static class SimilarItemsHelper
     {
-        /// <summary>
-        /// Gets the similar items.
-        /// </summary>
-        /// <param name="dtoOptions">The dto options.</param>
-        /// <param name="userManager">The user manager.</param>
-        /// <param name="itemRepository">The item repository.</param>
-        /// <param name="libraryManager">The library manager.</param>
-        /// <param name="userDataRepository">The user data repository.</param>
-        /// <param name="dtoService">The dto service.</param>
-        /// <param name="logger">The logger.</param>
-        /// <param name="request">The request.</param>
-        /// <param name="includeInSearch">The include in search.</param>
-        /// <param name="getSimilarityScore">The get similarity score.</param>
-        /// <returns>ItemsResult.</returns>
-        internal static ItemsResult GetSimilarItemsResult(DtoOptions dtoOptions, IUserManager userManager, IItemRepository itemRepository, ILibraryManager libraryManager, IUserDataManager userDataRepository, IDtoService dtoService, ILogger logger, BaseGetSimilarItemsFromItem request, Func<BaseItem, bool> includeInSearch, Func<BaseItem, List<PersonInfo>, List<PersonInfo>, BaseItem, int> getSimilarityScore)
+        internal static async Task<QueryResult<BaseItemDto>> GetSimilarItemsResult(DtoOptions dtoOptions, IUserManager userManager, IItemRepository itemRepository, ILibraryManager libraryManager, IUserDataManager userDataRepository, IDtoService dtoService, ILogger logger, BaseGetSimilarItemsFromItem request, Type[] includeTypes, Func<BaseItem, List<PersonInfo>, List<PersonInfo>, BaseItem, int> getSimilarityScore)
         {
             var user = !string.IsNullOrWhiteSpace(request.UserId) ? userManager.GetUserById(request.UserId) : null;
 
@@ -76,11 +66,19 @@ namespace MediaBrowser.Api
                 (!string.IsNullOrWhiteSpace(request.UserId) ? user.RootFolder :
                 libraryManager.RootFolder) : libraryManager.GetItemById(request.Id);
 
-            Func<BaseItem, bool> filter = i => i.Id != item.Id && includeInSearch(i);
+            var query = new InternalItemsQuery(user)
+            {
+                IncludeItemTypes = includeTypes.Select(i => i.Name).ToArray(),
+                Recursive = true
+            };
 
-            var inputItems = user == null
-                                 ? libraryManager.RootFolder.GetRecursiveChildren(filter)
-                                 : user.RootFolder.GetRecursiveChildren(user, filter);
+            // ExcludeArtistIds
+            if (!string.IsNullOrEmpty(request.ExcludeArtistIds))
+            {
+                query.ExcludeArtistIds = request.ExcludeArtistIds.Split('|');
+            }
+
+            var inputItems = libraryManager.GetItemList(query);
 
             var items = GetSimilaritems(item, libraryManager, inputItems, getSimilarityScore)
                 .ToList();
@@ -92,14 +90,14 @@ namespace MediaBrowser.Api
                 returnItems = returnItems.Take(request.Limit.Value);
             }
 
-            var result = new ItemsResult
+            var dtos = await dtoService.GetBaseItemDtos(returnItems, dtoOptions, user).ConfigureAwait(false);
+
+            return new QueryResult<BaseItemDto>
             {
-                Items = dtoService.GetBaseItemDtos(returnItems, dtoOptions, user).ToArray(),
+                Items = dtos.ToArray(),
 
                 TotalRecordCount = items.Count
             };
-
-            return result;
         }
 
         /// <summary>
@@ -128,24 +126,12 @@ namespace MediaBrowser.Api
 
         private static IEnumerable<string> GetTags(BaseItem item)
         {
-            var hasTags = item as IHasTags;
-            if (hasTags != null)
-            {
-                return hasTags.Tags;
-            }
-
-            return new List<string>();
+            return item.Tags;
         }
 
         private static IEnumerable<string> GetKeywords(BaseItem item)
         {
-            var hasTags = item as IHasKeywords;
-            if (hasTags != null)
-            {
-                return hasTags.Keywords;
-            }
-
-            return new List<string>();
+            return item.Keywords;
         }
 
         /// <summary>

@@ -1,5 +1,4 @@
 ﻿using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Sorting;
 using MediaBrowser.Model.Querying;
 using System;
@@ -16,33 +15,14 @@ namespace MediaBrowser.Server.Implementations.Sorting
         /// <returns>System.Int32.</returns>
         public int Compare(BaseItem x, BaseItem y)
         {
-            return AlphanumComparator.CompareValues(GetValue(x), GetValue(y));
+            return string.Compare(GetValue(x), GetValue(y), StringComparison.CurrentCultureIgnoreCase);
         }
 
         private string GetValue(BaseItem item)
         {
-            Series series = null;
+            var hasSeries = item as IHasSeries;
 
-            var season = item as Season;
-
-            if (season != null)
-            {
-                series = season.Series;
-            }
-
-            var episode = item as Episode;
-
-            if (episode != null)
-            {
-                series = episode.Series;
-            }
-
-            if (series == null)
-            {
-                series = item as Series;
-            }
-
-            return series != null ? series.SortName : null;
+            return hasSeries != null ? hasSeries.SeriesSortName : null;
         }
 
         /// <summary>

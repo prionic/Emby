@@ -18,7 +18,7 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
         private readonly IHttpClient _httpClient;
         private readonly IUserManager _userManager;
         private readonly ILogger _logger;
-        private const string MbAdminUrl = "http://www.mb3admin.com/admin/";
+        private const string MbAdminUrl = "https://www.mb3admin.com/admin/";
 
         public UsageReporter(IApplicationHost applicationHost, IHttpClient httpClient, IUserManager userManager, ILogger logger)
         {
@@ -51,13 +51,20 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
 
             data["plugins"] = string.Join(",", _applicationHost.Plugins.Select(i => i.Id).ToArray());
 
+            var logErrors = false;
+#if DEBUG
+            logErrors = true;
+#endif
             var options = new HttpRequestOptions
             {
                 Url = MbAdminUrl + "service/registration/ping",
                 CancellationToken = cancellationToken,
 
                 // Seeing block length errors
-                EnableHttpCompression = false
+                EnableHttpCompression = false,
+
+                LogRequest = false,
+                LogErrors = logErrors
             };
 
             options.SetPostData(data);
@@ -93,13 +100,21 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
                 { "platform", app.DeviceName }, 
             };
 
+            var logErrors = false;
+
+#if DEBUG
+            logErrors = true;
+#endif
             var options = new HttpRequestOptions
             {
                 Url = MbAdminUrl + "service/registration/ping",
                 CancellationToken = cancellationToken,
 
                 // Seeing block length errors
-                EnableHttpCompression = false
+                EnableHttpCompression = false,
+
+                LogRequest = false,
+                LogErrors = logErrors
             };
 
             options.SetPostData(data);

@@ -1,4 +1,4 @@
-﻿(function ($, document, window) {
+﻿define(['jQuery'], function ($) {
 
     var currentProfile;
 
@@ -164,6 +164,9 @@
         currentSubProfile.Match = $('#selectMatchType', page).val();
 
         if (isSubProfileNew) {
+
+            currentProfile.Identification = currentProfile.Identification || {};
+            currentProfile.Identification.Headers = currentProfile.Identification.Headers || [];
 
             currentProfile.Identification.Headers.push(currentSubProfile);
         }
@@ -866,8 +869,10 @@
                 contentType: "application/json"
             }).then(function () {
 
-                Dashboard.alert('Settings saved.');
-            });
+                require(['toast'], function (toast) {
+                    toast('Settings saved.');
+                });
+            }, Dashboard.processErrorResponse);
 
         } else {
 
@@ -880,7 +885,7 @@
 
                 Dashboard.navigate('dlnaprofiles.html');
 
-            });
+            }, Dashboard.processErrorResponse);
 
         }
 
@@ -1172,4 +1177,4 @@
         }
     };
 
-})(jQuery, document, window);
+});

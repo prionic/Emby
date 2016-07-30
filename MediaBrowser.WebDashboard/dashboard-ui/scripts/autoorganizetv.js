@@ -1,4 +1,4 @@
-﻿(function ($, document, window) {
+﻿define(['jQuery'], function ($) {
 
     function updateSeasonPatternHelp(page, value) {
 
@@ -103,10 +103,26 @@
 
             tvOptions.CopyOriginalFile = $('#copyOrMoveFile', form).val();
 
-            ApiClient.updateNamedConfiguration('autoorganize', config).then(Dashboard.processServerConfigurationUpdateResult);
+            ApiClient.updateNamedConfiguration('autoorganize', config).then(Dashboard.processServerConfigurationUpdateResult, Dashboard.processErrorResponse);
         });
 
         return false;
+    }
+
+    function getTabs() {
+        return [
+        {
+            href: 'autoorganizelog.html',
+            name: Globalize.translate('TabActivityLog')
+        },
+         {
+             href: 'autoorganizetv.html',
+             name: Globalize.translate('TabTV')
+         },
+         {
+             href: 'autoorganizesmart.html',
+             name: Globalize.translate('TabSmartMatches')
+         }];
     }
 
     $(document).on('pageinit', "#libraryFileOrganizerPage", function () {
@@ -160,9 +176,10 @@
 
         var page = this;
 
+        LibraryMenu.setTabs('autoorganize', 1, getTabs);
+
         ApiClient.getNamedConfiguration('autoorganize').then(function (config) {
             loadPage(page, config);
         });
     });
-
-})(jQuery, document, window);
+});

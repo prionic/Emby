@@ -3,7 +3,6 @@ using MediaBrowser.Common.ScheduledTasks;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Logging;
@@ -16,6 +15,7 @@ using System.Threading.Tasks;
 using CommonIO;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Localization;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Server.Implementations.ScheduledTasks;
@@ -33,7 +33,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
         private readonly ILocalizationManager _localization;
         private readonly ITaskManager _taskManager;
 
-        public const int MigrationVersion = 20;
+        public const int MigrationVersion = 23;
         public static bool EnableUnavailableMessage = false;
 
         public CleanDatabaseScheduledTask(ILibraryManager libraryManager, IItemRepository itemRepo, ILogger logger, IServerConfigurationManager config, IFileSystem fileSystem, IHttpServer httpServer, ILocalizationManager localization, ITaskManager taskManager)
@@ -86,7 +86,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
             innerProgress = new ActionableProgress<double>();
             innerProgress.RegisterAction(p =>
             {
-                double newPercentCommplete = 40 + (.05 * p);
+                double newPercentCommplete = 40 + .05 * p;
                 OnProgress(newPercentCommplete);
                 progress.Report(newPercentCommplete);
             });
@@ -96,7 +96,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
             innerProgress = new ActionableProgress<double>();
             innerProgress.RegisterAction(p =>
             {
-                double newPercentCommplete = 45 + (.55 * p);
+                double newPercentCommplete = 45 + .55 * p;
                 OnProgress(newPercentCommplete);
                 progress.Report(newPercentCommplete);
             });
@@ -108,6 +108,12 @@ namespace MediaBrowser.Server.Implementations.Persistence
             if (_config.Configuration.MigrationVersion < MigrationVersion)
             {
                 _config.Configuration.MigrationVersion = MigrationVersion;
+                _config.SaveConfiguration();
+            }
+
+            if (_config.Configuration.SchemaVersion < SqliteItemRepository.LatestSchemaVersion)
+            {
+                _config.Configuration.SchemaVersion = SqliteItemRepository.LatestSchemaVersion;
                 _config.SaveConfiguration();
             }
 
@@ -140,13 +146,16 @@ namespace MediaBrowser.Server.Implementations.Persistence
         {
             var itemIds = _libraryManager.GetItemIds(new InternalItemsQuery
             {
-                IsCurrentSchema = false
+                IsCurrentSchema = false,
+                ExcludeItemTypes = new[] { typeof(LiveTvProgram).Name }
             });
 
             var numComplete = 0;
             var numItems = itemIds.Count;
 
             _logger.Debug("Upgrading schema for {0} items", numItems);
+
+            var list = new List<BaseItem>();
 
             foreach (var itemId in itemIds)
             {
@@ -159,25 +168,48 @@ namespace MediaBrowser.Server.Implementations.Persistence
 
                     if (item != null)
                     {
-                        try
-                        {
-                            await _itemRepo.SaveItem(item, cancellationToken).ConfigureAwait(false);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            throw;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.ErrorException("Error saving item", ex);
-                        }
+                        list.Add(item);
                     }
+                }
+
+                if (list.Count >= 1000)
+                {
+                    try
+                    {
+                        await _itemRepo.SaveItems(list, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.ErrorException("Error saving item", ex);
+                    }
+
+                    list.Clear();
                 }
 
                 numComplete++;
                 double percent = numComplete;
                 percent /= numItems;
                 progress.Report(percent * 100);
+            }
+
+            if (list.Count > 0)
+            {
+                try
+                {
+                    await _itemRepo.SaveItems(list, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.ErrorException("Error saving item", ex);
+                }
             }
 
             progress.Report(100);
@@ -208,7 +240,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
                     await item.Delete(new DeleteOptions
                     {
                         DeleteFileLocation = false
-                        
+
                     }).ConfigureAwait(false);
                 }
 
@@ -225,20 +257,20 @@ namespace MediaBrowser.Server.Implementations.Persistence
         {
             var result = _itemRepo.GetItemIdsWithPath(new InternalItemsQuery
             {
-                LocationType = LocationType.FileSystem,
+                LocationTypes = new[] { LocationType.FileSystem },
                 //Limit = limit,
 
                 // These have their own cleanup routines
                 ExcludeItemTypes = new[]
                 {
-                    typeof(Person).Name, 
-                    typeof(Genre).Name, 
-                    typeof(MusicGenre).Name, 
-                    typeof(GameGenre).Name, 
-                    typeof(Studio).Name, 
-                    typeof(Year).Name, 
-                    typeof(Channel).Name, 
-                    typeof(AggregateFolder).Name, 
+                    typeof(Person).Name,
+                    typeof(Genre).Name,
+                    typeof(MusicGenre).Name,
+                    typeof(GameGenre).Name,
+                    typeof(Studio).Name,
+                    typeof(Year).Name,
+                    typeof(Channel).Name,
+                    typeof(AggregateFolder).Name,
                     typeof(CollectionFolder).Name
                 }
             });
@@ -266,6 +298,19 @@ namespace MediaBrowser.Server.Implementations.Persistence
                         continue;
                     }
 
+                    var hasDualAccess = libraryItem as IHasDualAccess;
+                    if (hasDualAccess != null && hasDualAccess.IsAccessedByName)
+                    {
+                        continue;
+                    }
+
+                    var libraryItemPath = libraryItem.Path;
+                    if (!string.Equals(libraryItemPath, path, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.Error("CleanDeletedItems aborting delete for item {0}-{1} because paths don't match. {2}---{3}", libraryItem.Id, libraryItem.Name, libraryItem.Path ?? string.Empty, path ?? string.Empty);
+                        continue;
+                    }
+
                     if (Folder.IsPathOffline(path))
                     {
                         libraryItem.IsOffline = true;
@@ -273,13 +318,9 @@ namespace MediaBrowser.Server.Implementations.Persistence
                         continue;
                     }
 
-                    _logger.Info("Deleting item from database {0} because path no longer exists. type: {1} path: {2}", libraryItem.Name, libraryItem.GetType().Name, libraryItem.Path ?? string.Empty);
+                    _logger.Info("Deleting item from database {0} because path no longer exists. type: {1} path: {2}", libraryItem.Name, libraryItem.GetType().Name, libraryItemPath ?? string.Empty);
 
-                    await libraryItem.Delete(new DeleteOptions
-                    {
-                        DeleteFileLocation = false
-
-                    }).ConfigureAwait(false);
+                    await libraryItem.OnFileDeleted().ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -299,8 +340,8 @@ namespace MediaBrowser.Server.Implementations.Persistence
 
         public IEnumerable<ITaskTrigger> GetDefaultTriggers()
         {
-            return new ITaskTrigger[] 
-            { 
+            return new ITaskTrigger[]
+            {
                 new IntervalTrigger{ Interval = TimeSpan.FromHours(24)}
             };
         }

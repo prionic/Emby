@@ -130,6 +130,8 @@
         /// </summary>
         Metascore,
 
+        OriginalTitle,
+
         /// <summary>
         /// The item overview
         /// </summary>
@@ -195,6 +197,8 @@
         /// </summary>
         SeriesGenres,
 
+        SeriesPrimaryImage,
+
         /// <summary>
         /// The series studio
         /// </summary>
@@ -235,11 +239,6 @@
         /// </summary>
         VoteCount,
 
-        /// <summary>
-        /// The TMDB collection name
-        /// </summary>
-        TmdbCollectionName,
-        
         /// <summary>
         /// The trailer url of the item
         /// </summary>

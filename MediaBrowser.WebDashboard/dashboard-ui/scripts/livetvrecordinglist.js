@@ -1,10 +1,11 @@
-﻿(function ($, document) {
+﻿define(['jQuery'], function ($) {
 
     // The base query options
     var query = {
 
         UserId: Dashboard.getCurrentUserId(),
-        StartIndex: 0
+        StartIndex: 0,
+        Fields: "CanDelete,PrimaryImageAspectRatio"
     };
 
     function reloadItems(page) {
@@ -28,7 +29,7 @@
 
             updateFilterControls();
 
-            var screenWidth = $(window).width();
+            var screenWidth = window.innerWidth;
 
             html += LibraryBrowser.getPosterViewHtml({
 
@@ -118,4 +119,4 @@
         updateFilterControls(this);
     });
 
-})(jQuery, document);
+});

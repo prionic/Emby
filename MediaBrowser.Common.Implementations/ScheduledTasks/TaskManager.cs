@@ -11,7 +11,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using CommonIO;
-using MediaBrowser.Common.IO;
 using Microsoft.Win32;
 
 namespace MediaBrowser.Common.Implementations.ScheduledTasks
@@ -89,8 +88,6 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks
             _fileSystem = fileSystem;
 
             ScheduledTasks = new IScheduledTaskWorker[] { };
-
-            BindToSystemEvent();
         }
 
         private void BindToSystemEvent()
@@ -168,6 +165,17 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks
             where T : IScheduledTask
         {
             QueueScheduledTask<T>(new TaskExecutionOptions());
+        }
+
+        public void QueueIfNotRunning<T>()
+            where T : IScheduledTask
+        {
+            var task = ScheduledTasks.First(t => t.ScheduledTask.GetType() == typeof(T));
+
+            if (task.State != TaskState.Running)
+            {
+                QueueScheduledTask<T>(new TaskExecutionOptions());
+            }
         }
 
         public void Execute<T>()
@@ -249,6 +257,8 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks
             myTasks.AddRange(list.Select(t => new ScheduledTaskWorker(t, ApplicationPaths, this, JsonSerializer, Logger, _fileSystem)));
 
             ScheduledTasks = myTasks.ToArray();
+
+            BindToSystemEvent();
         }
 
         /// <summary>

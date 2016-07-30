@@ -1,4 +1,4 @@
-﻿(function ($, document) {
+﻿define(['listView', 'emby-itemscontainer'], function (listView) {
 
     function renderItems(page, item) {
 
@@ -29,7 +29,6 @@
         }
 
         if (item.TrailerCount) {
-
             sections.push({
                 name: Globalize.translate('TabTrailers'),
                 type: 'Trailer'
@@ -80,10 +79,10 @@
             html += '<h1 class="listHeader" style="display:inline-block;vertical-align:middle;">';
             html += section.name;
             html += '</h1>';
-            html += '<a href="#" class="clearLink hide" style="margin-left:1em;vertical-align:middle;"><paper-button raised class="more mini noIcon">' + Globalize.translate('ButtonMore') + '</paper-button></a>';
+            html += '<a href="#" class="clearLink hide" style="margin-left:1em;vertical-align:middle;"><button is="emby-button" type="button" class="raised more mini noIcon">' + Globalize.translate('ButtonMore') + '</button></a>';
             html += '</div>';
 
-            html += '<div class="itemsContainer">';
+            html += '<div is="emby-itemscontainer" class="itemsContainer">';
             html += '</div>';
 
             html += '</div>';
@@ -219,7 +218,7 @@
                     Limit: 30
                 }, {
                     playFromHere: true,
-                    defaultAction: 'playallfromhere',
+                    action: 'playallfromhere',
                     smallIcon: true
                 });
                 break;
@@ -249,7 +248,7 @@
             listOptions.items = result.Items;
 
             if (type == 'Audio') {
-                html = LibraryBrowser.getListViewHtml(listOptions);
+                html = listView.getListViewHtml(listOptions);
             } else {
                 html = LibraryBrowser.getPosterViewHtml(listOptions);
             }
@@ -257,14 +256,13 @@
             var itemsContainer = element.querySelector('.itemsContainer');
             itemsContainer.innerHTML = html;
 
-            $(itemsContainer).createCardMenus();
             ImageLoader.lazyChildren(itemsContainer);
         });
     }
 
     function getMoreItemsHref(item, type) {
 
-        return 'secondaryitems.html?type=' + type + '&parentid=' + item.Id;
+        return 'secondaryitems.html?type=' + type + '&parentId=' + item.Id;
     }
 
     function addCurrentItemToQuery(query, item) {
@@ -303,7 +301,7 @@
             CollapseBoxSetItems: false
         };
 
-        query = $.extend(query, options || {});
+        query = Object.assign(query, options || {});
 
         if (query.IncludeItemTypes == "Audio") {
             query.SortBy = "AlbumArtist,Album,SortName";
@@ -337,4 +335,4 @@
         renderItems: renderItems
     };
 
-})(jQuery, document);
+});

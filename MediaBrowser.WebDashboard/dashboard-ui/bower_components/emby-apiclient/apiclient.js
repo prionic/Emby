@@ -1,4 +1,4 @@
-﻿define(['events'], function (Events) {
+﻿define(['events'], function (events) {
 
     /**
      * Creates a new api client instance
@@ -38,7 +38,7 @@
                 serverAddress = val;
 
                 if (changed) {
-                    Events.trigger(this, 'serveraddresschanged');
+                    events.trigger(this, 'serveraddresschanged');
                 }
             }
 
@@ -52,6 +52,10 @@
             return serverInfo;
         };
 
+        self.serverId = function () {
+            return self.serverInfo().Id;
+        };
+
         var currentUser;
         /**
          * Gets or sets the current user id.
@@ -59,25 +63,31 @@
         self.getCurrentUser = function () {
 
             if (currentUser) {
-                return new Promise(function (resolve, reject) {
-
-                    resolve(currentUser);
-                });
+                return Promise.resolve(currentUser);
             }
 
             var userId = self.getCurrentUserId();
 
             if (!userId) {
-                return new Promise(function (resolve, reject) {
-
-                    reject();
-                });
+                return Promise.reject();
             }
 
             return self.getUser(userId).then(function (user) {
                 currentUser = user;
                 return user;
             });
+        };
+
+        self.isLoggedIn = function () {
+
+            var info = self.serverInfo();
+            if (info) {
+                if (info.UserId && info.AccessToken) {
+                    return true;
+                }
+            }
+
+            return false;
         };
 
         /**
@@ -131,11 +141,11 @@
 
         function onFetchFail(url, response) {
 
-            Events.trigger(self, 'requestfail', [
+            events.trigger(self, 'requestfail', [
             {
                 url: url,
                 status: response.status,
-                errorCode: response.headers ? response.headers["X-Application-Error-Code"] : null
+                errorCode: response.headers ? response.headers.get('X-Application-Error-Code') : null
             }]);
         }
 
@@ -520,6 +530,19 @@
             }
         };
 
+        self.ensureWebSocket = function () {
+            if (self.isWebSocketOpenOrConnecting() || !self.isWebSocketSupported()) {
+                return;
+            }
+
+            self.openWebSocket();
+        };
+
+        function replaceAll(originalString, strReplace, strWith) {
+            var reg = new RegExp(strReplace, 'ig');
+            return originalString.replace(reg, strWith);
+        }
+
         self.openWebSocket = function () {
 
             var accessToken = self.accessToken();
@@ -528,7 +551,10 @@
                 throw new Error("Cannot open web socket without access token.");
             }
 
-            var url = self.getUrl("socket").replace("emby/socket", "embywebsocket").replace('http', 'ws');
+            var url = self.getUrl("socket");
+
+            url = replaceAll(url, 'emby/socket', 'embywebsocket');
+            url = replaceAll(url, 'http', 'ws');
 
             url += "?api_key=" + accessToken;
             url += "&deviceId=" + deviceId;
@@ -545,17 +571,15 @@
 
                 console.log('web socket connection opened');
                 setTimeout(function () {
-                    Events.trigger(self, 'websocketopen');
+                    events.trigger(self, 'websocketopen');
                 }, 0);
             };
             webSocket.onerror = function () {
-                setTimeout(function () {
-                    Events.trigger(self, 'websocketerror');
-                }, 0);
+                events.trigger(self, 'websocketerror');
             };
             webSocket.onclose = function () {
                 setTimeout(function () {
-                    Events.trigger(self, 'websocketclose');
+                    events.trigger(self, 'websocketclose');
                 }, 0);
             };
         };
@@ -580,7 +604,7 @@
                 }
             }
 
-            Events.trigger(self, 'websocketmessage', [msg]);
+            events.trigger(self, 'websocketmessage', [msg]);
         }
 
         self.sendWebSocketMessage = function (name, data) {
@@ -1119,11 +1143,13 @@
 
         self.performEpisodeOrganization = function (id, options) {
 
-            var url = self.getUrl("Library/FileOrganizations/" + id + "/Episode/Organize", options || {});
+            var url = self.getUrl("Library/FileOrganizations/" + id + "/Episode/Organize");
 
             return self.ajax({
                 type: "POST",
-                url: url
+                url: url,
+                data: JSON.stringify(options),
+                contentType: 'application/json'
             });
         };
 
@@ -2822,6 +2848,16 @@
             return self.getJSON(url);
         };
 
+        self.getMovieRecommendations = function (options) {
+
+            return self.getJSON(self.getUrl('Movies/Recommendations', options));
+        };
+
+        self.getUpcomingEpisodes = function (options) {
+
+            return self.getJSON(self.getUrl('Shows/Upcoming', options));
+        };
+
         self.getChannels = function (query) {
 
             return self.getJSON(self.getUrl("Channels", query || {}));
@@ -2962,6 +2998,20 @@
             }
 
             var url = self.getUrl("Users/" + userId + "/Items/" + itemId + "/LocalTrailers");
+
+            return self.getJSON(url);
+        };
+
+        self.getGameSystems = function () {
+
+            var options = {};
+
+            var userId = self.getCurrentUserId();
+            if (userId) {
+                options.userId = userId;
+            }
+
+            var url = self.getUrl("Games/SystemSummaries", options);
 
             return self.getJSON(url);
         };
@@ -3442,6 +3492,58 @@
                 url: url,
                 data: JSON.stringify(postData),
                 contentType: "application/json"
+            });
+        };
+
+        self.createPin = function () {
+
+            return self.ajax({
+                type: "POST",
+                url: self.getUrl('Auth/Pin'),
+                data: {
+                    deviceId: self.deviceId(),
+                    appName: self.appName()
+                },
+                dataType: "json"
+            });
+        };
+
+        self.getPinStatus = function (pinInfo) {
+
+            var queryString = {
+                deviceId: pinInfo.DeviceId,
+                pin: pinInfo.Pin
+            };
+
+            return self.ajax({
+                type: 'GET',
+                url: self.getUrl('Auth/Pin', queryString),
+                dataType: 'json'
+            });
+        };
+
+        function exchangePin(pinInfo) {
+
+            return self.ajax({
+                type: 'POST',
+                url: self.getUrl('Auth/Pin/Exchange'),
+                data: {
+                    deviceId: pinInfo.DeviceId,
+                    pin: pinInfo.Pin
+                },
+                dataType: 'json'
+            });
+        }
+
+        self.exchangePin = function (pinInfo) {
+
+            return exchangePin(pinInfo).then(function (result) {
+
+                if (self.onAuthenticated) {
+                    self.onAuthenticated(self, result);
+                }
+
+                return result;
             });
         };
     };

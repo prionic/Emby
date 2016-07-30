@@ -1,12 +1,12 @@
-﻿(function ($, document, window) {
+﻿define(['jQuery'], function ($) {
 
     function resetTuner(page, id) {
 
         var message = Globalize.translate('MessageConfirmResetTuner');
 
-        Dashboard.confirm(message, Globalize.translate('HeaderResetTuner'), function (confirmResult) {
+        require(['confirm'], function (confirm) {
 
-            if (confirmResult) {
+            confirm(message, Globalize.translate('HeaderResetTuner')).then(function () {
 
                 Dashboard.showLoadingMsg();
 
@@ -16,7 +16,7 @@
 
                     reload(page);
                 });
-            }
+            });
         });
     }
 
@@ -74,7 +74,11 @@
                 html += '</div>';
 
                 html += '</paper-item-body>';
-                html += '<paper-icon-button icon="refresh" data-tunerid="' + tuner.Id + '" title="' + Globalize.translate('ButtonResetTuner') + '" class="btnResetTuner"></paper-icon-button>';
+
+                if (tuner.CanReset) {
+                    html += '<button type="button" is="paper-icon-button-light" data-tunerid="' + tuner.Id + '" title="' + Globalize.translate('ButtonResetTuner') + '" class="btnResetTuner"><iron-icon icon="refresh"></iron-icon></button>';
+                }
+
                 html += '</paper-icon-item>';
             }
 
@@ -160,7 +164,7 @@
             $('.servicesSection', page).hide();
         }
 
-        $('.servicesList', page).html(servicesToDisplay.map(getServiceHtml).join('')).trigger('create');
+        $('.servicesList', page).html(servicesToDisplay.map(getServiceHtml).join(''));
 
         var tuners = [];
         for (var i = 0, length = liveTvInfo.Services.length; i < length; i++) {
@@ -201,7 +205,7 @@
                 html += '<paper-item-body two-line>';
                 html += '<a class="clearLink" href="' + href + '">';
                 html += '<div>';
-                html += getTunerName(device.Type);
+                html += device.FriendlyName || getTunerName(device.Type);
                 html += '</div>';
 
                 html += '<div secondary>';
@@ -210,7 +214,7 @@
                 html += '</a>';
                 html += '</paper-item-body>';
 
-                html += '<paper-icon-button icon="delete" data-id="' + device.Id + '" title="' + Globalize.translate('ButtonDelete') + '" class="btnDeleteDevice"></paper-icon-button>';
+                html += '<button type="button" is="paper-icon-button-light" class="btnDeleteDevice" data-id="' + device.Id + '" title="' + Globalize.translate('ButtonDelete') + '"><iron-icon icon="delete"></iron-icon></button>';
                 html += '</paper-icon-item>';
             }
 
@@ -231,9 +235,9 @@
 
         var message = Globalize.translate('MessageConfirmDeleteTunerDevice');
 
-        Dashboard.confirm(message, Globalize.translate('HeaderDeleteDevice'), function (confirmResult) {
+        require(['confirm'], function (confirm) {
 
-            if (confirmResult) {
+            confirm(message, Globalize.translate('HeaderDeleteDevice')).then(function () {
 
                 Dashboard.showLoadingMsg();
 
@@ -247,7 +251,7 @@
 
                     reload(page);
                 });
-            }
+            });
         });
     }
 
@@ -259,6 +263,12 @@
 
             loadPage(page, liveTvInfo);
 
+        }, function () {
+
+            loadPage(page, {
+                Services: [],
+                IsEnabled: true
+            });
         });
     }
 
@@ -312,7 +322,7 @@
 
                 html += '</a>';
                 html += '</paper-item-body>';
-                html += '<paper-icon-button icon="delete" data-id="' + provider.Id + '" title="' + Globalize.translate('ButtonDelete') + '" class="btnDelete"></paper-icon-button>';
+                html += '<button type="button" is="paper-icon-button-light" class="btnOptions" data-id="' + provider.Id + '"><iron-icon icon="more-vert"></iron-icon></button>';
                 html += '</paper-icon-item>';
             }
 
@@ -321,11 +331,59 @@
 
         var elem = $('.providerList', page).html(html);
 
-        $('.btnDelete', elem).on('click', function () {
+        $('.btnOptions', elem).on('click', function () {
 
             var id = this.getAttribute('data-id');
 
-            deleteProvider(page, id);
+            showProviderOptions(page, id, this);
+        });
+    }
+
+    function showProviderOptions(page, providerId, button) {
+
+        var items = [];
+
+        items.push({
+            name: Globalize.translate('ButtonDelete'),
+            id: 'delete'
+        });
+
+        items.push({
+            name: Globalize.translate('MapChannels'),
+            id: 'map'
+        });
+
+        require(['actionsheet'], function (actionsheet) {
+
+            actionsheet.show({
+                items: items,
+                positionTo: button
+
+            }).then(function (id) {
+
+                switch (id) {
+
+                    case 'delete':
+                        deleteProvider(page, providerId);
+                        break;
+                    case 'map':
+                        mapChannels(page, providerId);
+                        break;
+                    default:
+                        break;
+                }
+            });
+
+        });
+    }
+
+    function mapChannels(page, providerId) {
+
+        require(['components/channelmapper/channelmapper'], function (channelmapper) {
+            new channelmapper({
+                serverId: ApiClient.serverInfo().Id,
+                providerId: providerId
+            }).show();
         });
     }
 
@@ -333,9 +391,9 @@
 
         var message = Globalize.translate('MessageConfirmDeleteGuideProvider');
 
-        Dashboard.confirm(message, Globalize.translate('HeaderDeleteProvider'), function (confirmResult) {
+        require(['confirm'], function (confirm) {
 
-            if (confirmResult) {
+            confirm(message, Globalize.translate('HeaderDeleteProvider')).then(function () {
 
                 Dashboard.showLoadingMsg();
 
@@ -353,7 +411,7 @@
 
                     reload(page);
                 });
-            }
+            });
         });
     }
 
@@ -367,6 +425,8 @@
                 return 'M3U Playlist';
             case 'hdhomerun':
                 return 'HDHomerun';
+            case 'satip':
+                return 'DVB';
             default:
                 return 'Unknown';
         }
@@ -380,6 +440,8 @@
 
             case 'schedulesdirect':
                 return 'Schedules Direct';
+            case 'xmltv':
+                return 'Xml TV';
             case 'emby':
                 return 'Emby Guide';
             default:
@@ -393,6 +455,8 @@
 
         switch (providerId) {
 
+            case 'xmltv':
+                return 'livetvguideprovider.html?type=xmltv';
             case 'schedulesdirect':
                 return 'livetvguideprovider.html?type=schedulesdirect';
             case 'emby':
@@ -415,6 +479,11 @@
         //    name: 'Emby Guide',
         //    id: 'emby'
         //});
+
+        menuItems.push({
+            name: 'Xml TV',
+            id: 'xmltv'
+        });
 
         menuItems.push({
             name: Globalize.translate('ButtonOther'),
@@ -444,6 +513,11 @@
     function addDevice(button) {
 
         var menuItems = [];
+
+        //menuItems.push({
+        //    name: getTunerName('satip'),
+        //    id: 'satip'
+        //});
 
         menuItems.push({
             name: 'HDHomerun',
@@ -480,6 +554,22 @@
         });
     }
 
+    function getTabs() {
+        return [
+        {
+            href: 'livetvstatus.html',
+            name: Globalize.translate('TabDevices')
+        },
+         {
+             href: 'livetvsettings.html',
+             name: Globalize.translate('TabSettings')
+         },
+         {
+             href: 'appservices.html?context=livetv',
+             name: Globalize.translate('TabServices')
+         }];
+    }
+
     $(document).on('pageinit', "#liveTvStatusPage", function () {
 
         var page = this;
@@ -499,6 +589,7 @@
 
     }).on('pageshow', "#liveTvStatusPage", function () {
 
+        LibraryMenu.setTabs('livetvadmin', 0, getTabs);
         var page = this;
 
         reload(page);
@@ -521,4 +612,4 @@
 
     });
 
-})(jQuery, document, window);
+});

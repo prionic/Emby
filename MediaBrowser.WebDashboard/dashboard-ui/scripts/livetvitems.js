@@ -1,4 +1,4 @@
-﻿(function ($, document) {
+﻿define(['emby-itemscontainer'], function () {
 
     var view = LibraryBrowser.getDefaultItemsView('Poster', 'Poster');
 
@@ -69,15 +69,28 @@
             elem.innerHTML = html + pagingHtml;
             ImageLoader.lazyChildren(elem);
 
-            $('.btnNextPage', page).on('click', function () {
+            var i, length;
+            var elems;
+
+            function onNextPageClick() {
                 query.StartIndex += query.Limit;
                 reloadItems(page);
-            });
+            }
 
-            $('.btnPreviousPage', page).on('click', function () {
+            function onPreviousPageClick() {
                 query.StartIndex -= query.Limit;
                 reloadItems(page);
-            });
+            }
+
+            elems = page.querySelectorAll('.btnNextPage');
+            for (i = 0, length = elems.length; i < length; i++) {
+                elems[i].addEventListener('click', onNextPageClick);
+            }
+
+            elems = page.querySelectorAll('.btnPreviousPage');
+            for (i = 0, length = elems.length; i < length; i++) {
+                elems[i].addEventListener('click', onPreviousPageClick);
+            }
 
             LibraryBrowser.saveQueryValues(getSavedQueryKey(), query);
 
@@ -109,4 +122,4 @@
         reloadItems(page);
     });
 
-})(jQuery, document);
+});

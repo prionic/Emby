@@ -1,6 +1,20 @@
-define(['paperdialoghelper', 'layoutManager', 'globalize', 'dialogText', 'html!./icons.html', 'css!./style.css', 'paper-button', 'paper-input'], function (paperdialoghelper, layoutManager, globalize, dialogText) {
+define(['dialogHelper', 'layoutManager', 'globalize', 'material-icons', 'css!./style.css', 'emby-button', 'paper-icon-button-light', 'emby-input'], function (dialogHelper, layoutManager, globalize) {
 
-    function show(options, resolve, reject) {
+    function getIcon(icon, cssClass, canFocus, autoFocus) {
+
+        var tabIndex = canFocus ? '' : ' tabindex="-1"';
+        autoFocus = autoFocus ? ' autofocus' : '';
+        return '<button is="paper-icon-button-light" class="autoSize ' + cssClass + '"' + tabIndex + autoFocus + '><i class="md-icon">' + icon + '</i></button>';
+    }
+
+    return function (options) {
+
+        if (typeof options === 'string') {
+            options = {
+                title: '',
+                text: options
+            };
+        }
 
         var dialogOptions = {
             removeOnClose: true
@@ -20,7 +34,7 @@ define(['paperdialoghelper', 'layoutManager', 'globalize', 'dialogText', 'html!.
             dialogOptions.exitAnimationDuration = 200;
         }
 
-        var dlg = paperdialoghelper.createDialog(dialogOptions);
+        var dlg = dialogHelper.createDialog(dialogOptions);
 
         dlg.classList.add('promptDialog');
 
@@ -29,7 +43,7 @@ define(['paperdialoghelper', 'layoutManager', 'globalize', 'dialogText', 'html!.
 
         html += '<div class="promptDialogContent">';
         if (backButton) {
-            html += '<paper-icon-button tabindex="-1" icon="dialog:arrow-back" class="btnPromptExit"></paper-icon-button>';
+            html += getIcon('&#xE5C4;', 'btnPromptExit', false);
         }
 
         if (options.title) {
@@ -38,76 +52,62 @@ define(['paperdialoghelper', 'layoutManager', 'globalize', 'dialogText', 'html!.
             html += '</h2>';
         }
 
-        html += '<paper-input autoFocus class="txtPromptValue"></paper-input>';
+        html += '<form>';
+
+        html += '<div class="inputContainer" style="margin-bottom:0;">';
+        html += '<input is="emby-input" type="text" autoFocus class="txtPromptValue" value="' + (options.value || '') + '" label="' + (options.label || '') + '"/>';
 
         if (options.description) {
             html += '<div class="fieldDescription">';
             html += options.description;
             html += '</div>';
         }
+        html += '</div>';
 
-        // TODO: An actual form element should probably be added
         html += '<br/>';
         if (raisedButtons) {
-            html += '<paper-button raised class="btnSubmit"><iron-icon icon="dialog:check"></iron-icon><span>' + globalize.translate(dialogText.buttonOk) + '</span></paper-button>';
+            html += '<button is="emby-button" type="submit" class="raised btnSubmit"><i class="md-icon">check</i><span>' + globalize.translate('sharedcomponents#ButtonOk') + '</span></button>';
         } else {
-            html += '<div style="text-align:right;">';
-            html += '<paper-button class="btnSubmit">' + globalize.translate(dialogText.buttonOk) + '</paper-button>';
-            html += '<paper-button class="btnPromptExit">' + globalize.translate(dialogText.buttonCancel) + '</paper-button>';
+            html += '<div class="buttons">';
+            html += '<button is="emby-button" type="submit" class="btnSubmit">' + globalize.translate('sharedcomponents#ButtonOk') + '</button>';
+            html += '<button is="emby-button" type="button" class="btnPromptExit">' + globalize.translate('sharedcomponents#ButtonCancel') + '</button>';
             html += '</div>';
         }
+        html += '</form>';
 
         html += '</div>';
 
         dlg.innerHTML = html;
 
-        if (options.text) {
-            dlg.querySelector('.txtPromptValue').value = options.text;
-        }
-
-        if (options.label) {
-            dlg.querySelector('.txtPromptValue').label = options.label;
-        }
-
         document.body.appendChild(dlg);
 
-        dlg.querySelector('.btnSubmit').addEventListener('click', function (e) {
+        dlg.querySelector('form').addEventListener('submit', function (e) {
 
             submitValue = dlg.querySelector('.txtPromptValue').value;
-            paperdialoghelper.close(dlg);
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Important, don't close the dialog until after the form has completed submitting, or it will cause an error in Chrome
+            setTimeout(function () {
+                dialogHelper.close(dlg);
+            }, 300);
+
+            return false;
         });
 
         dlg.querySelector('.btnPromptExit').addEventListener('click', function (e) {
 
-            paperdialoghelper.close(dlg);
+            dialogHelper.close(dlg);
         });
 
-        dlg.addEventListener('iron-overlay-closed', function () {
-
+        return dialogHelper.open(dlg).then(function () {
             var value = submitValue;
+
             if (value) {
-                resolve(value);
+                return value;
             } else {
-                reject();
+                return Promise.reject();
             }
         });
-
-        paperdialoghelper.open(dlg);
-    }
-
-    return function (options) {
-
-        return new Promise(function (resolve, reject) {
-
-            if (typeof options === 'string') {
-                options = {
-                    title: '',
-                    text: options
-                };
-            }
-
-            show(options, resolve, reject);
-        });
-
     };
 });

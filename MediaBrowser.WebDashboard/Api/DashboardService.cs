@@ -1,5 +1,4 @@
 ﻿using MediaBrowser.Common.Extensions;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Localization;
@@ -25,7 +24,6 @@ namespace MediaBrowser.WebDashboard.Api
     /// <summary>
     /// Class GetDashboardConfigurationPages
     /// </summary>
-    [Route("/dashboard/ConfigurationPages", "GET")]
     [Route("/web/ConfigurationPages", "GET")]
     public class GetDashboardConfigurationPages : IReturn<List<ConfigurationPageInfo>>
     {
@@ -39,7 +37,6 @@ namespace MediaBrowser.WebDashboard.Api
     /// <summary>
     /// Class GetDashboardConfigurationPage
     /// </summary>
-    [Route("/dashboard/ConfigurationPage", "GET")]
     [Route("/web/ConfigurationPage", "GET")]
     public class GetDashboardConfigurationPage
     {
@@ -51,7 +48,6 @@ namespace MediaBrowser.WebDashboard.Api
     }
 
     [Route("/web/Package", "GET")]
-    [Route("/dashboard/Package", "GET")]
     public class GetDashboardPackage
     {
         public string Mode { get; set; }
@@ -66,7 +62,6 @@ namespace MediaBrowser.WebDashboard.Api
     /// Class GetDashboardResource
     /// </summary>
     [Route("/web/{ResourceName*}", "GET")]
-    [Route("/dashboard/{ResourceName*}", "GET")]
     public class GetDashboardResource
     {
         /// <summary>
@@ -138,11 +133,11 @@ namespace MediaBrowser.WebDashboard.Api
         /// </summary>
         /// <param name="request">The request.</param>
         /// <returns>System.Object.</returns>
-        public object Get(GetDashboardConfigurationPage request)
+        public Task<object> Get(GetDashboardConfigurationPage request)
         {
             var page = ServerEntryPoint.Instance.PluginConfigurationPages.First(p => p.Name.Equals(request.Name, StringComparison.OrdinalIgnoreCase));
 
-            return ResultFactory.GetStaticResult(Request, page.Plugin.Version.ToString().GetMD5(), null, null, MimeTypes.GetMimeType("page.html"), () => GetPackageCreator().ModifyHtml(page.GetHtmlStream(), null, _appHost.ApplicationVersion.ToString(), null, false));
+            return ResultFactory.GetStaticResult(Request, page.Plugin.Version.ToString().GetMD5(), null, null, MimeTypes.GetMimeType("page.html"), () => GetPackageCreator().ModifyHtml("dummy.html", page.GetHtmlStream(), null, _appHost.ApplicationVersion.ToString(), null, false));
         }
 
         /// <summary>
@@ -206,7 +201,7 @@ namespace MediaBrowser.WebDashboard.Api
         /// </summary>
         /// <param name="request">The request.</param>
         /// <returns>System.Object.</returns>
-        public object Get(GetDashboardResource request)
+        public async Task<object> Get(GetDashboardResource request)
         {
             var path = request.ResourceName;
 
@@ -235,7 +230,8 @@ namespace MediaBrowser.WebDashboard.Api
                 !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
                 !contentType.StartsWith("font/", StringComparison.OrdinalIgnoreCase))
             {
-                return ResultFactory.GetResult(GetResourceStream(path, localizationCulture).Result, contentType);
+                var stream = await GetResourceStream(path, localizationCulture).ConfigureAwait(false);
+                return ResultFactory.GetResult(stream, contentType);
             }
 
             TimeSpan? cacheDuration = null;
@@ -251,7 +247,7 @@ namespace MediaBrowser.WebDashboard.Api
 
             var cacheKey = (assembly.Version + (localizationCulture ?? string.Empty) + path).GetMD5();
 
-            return ResultFactory.GetStaticResult(Request, cacheKey, null, cacheDuration, contentType, () => GetResourceStream(path, localizationCulture));
+            return await ResultFactory.GetStaticResult(Request, cacheKey, null, cacheDuration, contentType, () => GetResourceStream(path, localizationCulture)).ConfigureAwait(false);
         }
 
         private string GetLocalizationCulture()
@@ -312,16 +308,16 @@ namespace MediaBrowser.WebDashboard.Api
 
             if (!string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
             {
-                var versionedBowerPath = Path.Combine(Path.GetDirectoryName(bowerPath), "bower_components" + _appHost.ApplicationVersion);
-                Directory.Move(bowerPath, versionedBowerPath);
-                bowerPath = versionedBowerPath;
+                //var versionedBowerPath = Path.Combine(Path.GetDirectoryName(bowerPath), "bower_components" + _appHost.ApplicationVersion);
+                //Directory.Move(bowerPath, versionedBowerPath);
+                //bowerPath = versionedBowerPath;
             }
 
             DeleteFilesByExtension(bowerPath, ".log");
             DeleteFilesByExtension(bowerPath, ".txt");
             DeleteFilesByExtension(bowerPath, ".map");
             DeleteFilesByExtension(bowerPath, ".md");
-            DeleteFilesByExtension(bowerPath, ".json");
+            DeleteFilesByExtension(bowerPath, ".json", "strings\\");
             DeleteFilesByExtension(bowerPath, ".gz");
             DeleteFilesByExtension(bowerPath, ".bat");
             DeleteFilesByExtension(bowerPath, ".sh");
@@ -345,21 +341,24 @@ namespace MediaBrowser.WebDashboard.Api
             DeleteFoldersByName(bowerPath, "grunt");
             DeleteFoldersByName(bowerPath, "rollups");
 
-            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "jquery", "external"), true);
+            if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
+            {
+                DeleteFoldersByName(Path.Combine(bowerPath, "emby-webcomponents", "fonts"), "montserrat");
+                DeleteFoldersByName(Path.Combine(bowerPath, "emby-webcomponents", "fonts"), "opensans");
+                DeleteFoldersByName(Path.Combine(bowerPath, "emby-webcomponents", "fonts"), "roboto");
+            }
+
             _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "jquery", "src"), true);
-          
+            //_fileSystem.DeleteDirectory(Path.Combine(bowerPath, "fingerprintjs2", "flash"), true);
+            //_fileSystem.DeleteDirectory(Path.Combine(bowerPath, "fingerprintjs2", "specs"), true);
+
             DeleteCryptoFiles(Path.Combine(bowerPath, "cryptojslib", "components"));
 
             DeleteFoldersByName(Path.Combine(bowerPath, "jquery"), "src");
             DeleteFoldersByName(Path.Combine(bowerPath, "jstree"), "src");
-            DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "meteor");
-            DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "st");
-            DeleteFoldersByName(Path.Combine(bowerPath, "Swiper"), "src");
-
-            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "marked"), true);
-            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "marked-element"), true);
-            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "prism"), true);
-            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "prism-element"), true);
+            //DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "meteor");
+            //DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "st");
+            //DeleteFoldersByName(Path.Combine(bowerPath, "Swiper"), "src");
            
             if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
             {
@@ -397,7 +396,7 @@ namespace MediaBrowser.WebDashboard.Api
             }
         }
 
-        private void DeleteFilesByExtension(string path, string extension)
+        private void DeleteFilesByExtension(string path, string extension, string exclude = null)
         {
             var files = _fileSystem.GetFiles(path, true)
                 .Where(i => string.Equals(i.Extension, extension, StringComparison.OrdinalIgnoreCase))
@@ -405,6 +404,13 @@ namespace MediaBrowser.WebDashboard.Api
 
             foreach (var file in files)
             {
+                if (!string.IsNullOrWhiteSpace(exclude))
+                {
+                    if (file.FullName.IndexOf(exclude, StringComparison.OrdinalIgnoreCase) != -1)
+                    {
+                        continue;
+                    }
+                }
                 _fileSystem.DeleteFile(file.FullName);
             }
         }
@@ -512,18 +518,6 @@ namespace MediaBrowser.WebDashboard.Api
                 var filename = Path.GetFileName(file);
 
                 await DumpFile(filename, Path.Combine(destination, filename), mode, culture, appVersion).ConfigureAwait(false);
-            }
-
-            var excludeFiles = new List<string>();
-
-            if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
-            {
-                excludeFiles.Add("supporterkey.html");
-            }
-
-            foreach (var file in excludeFiles)
-            {
-                _fileSystem.DeleteFile(Path.Combine(destination, file));
             }
         }
 

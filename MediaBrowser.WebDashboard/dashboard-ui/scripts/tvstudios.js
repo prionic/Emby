@@ -1,9 +1,9 @@
-﻿(function ($, document) {
+﻿define(['libraryBrowser'], function (libraryBrowser) {
 
     // The base query options
     var data = {};
 
-    function getQuery() {
+    function getQuery(params) {
 
         var key = getSavedQueryKey();
         var pageData = data[key];
@@ -16,43 +16,35 @@
                     IncludeItemTypes: "Series",
                     Recursive: true,
                     Fields: "DateCreated,ItemCounts",
-                    StartIndex: 0,
-                    Limit: LibraryBrowser.getDefaultPageSize()
+                    StartIndex: 0
                 }
             };
 
-            pageData.query.ParentId = LibraryMenu.getTopParentId();
-            LibraryBrowser.loadSavedQueryValues(key, pageData.query);
+            pageData.query.ParentId = params.topParentId;
         }
         return pageData.query;
     }
 
     function getSavedQueryKey() {
 
-        return LibraryBrowser.getSavedQueryKey('studios');
+        return libraryBrowser.getSavedQueryKey('studios');
     }
 
-    function reloadItems(page) {
+    function getPromise(context, params) {
 
-        var query = getQuery();
+        var query = getQuery(params);
 
         Dashboard.showLoadingMsg();
 
-        ApiClient.getStudios(Dashboard.getCurrentUserId(), query).then(function (result) {
+        return ApiClient.getStudios(Dashboard.getCurrentUserId(), query);
+    }
+    function reloadItems(context, params, promise) {
 
-            // Scroll back up so they can see the results from the beginning
-            window.scrollTo(0, 0);
+        promise.then(function (result) {
 
             var html = '';
 
-            $('.listTopPaging', page).html(LibraryBrowser.getQueryPagingHtml({
-                startIndex: query.StartIndex,
-                limit: query.Limit,
-                totalRecordCount: result.TotalRecordCount,
-                showLimit: false
-            }));
-
-            html += LibraryBrowser.getPosterViewHtml({
+            html += libraryBrowser.getPosterViewHtml({
                 items: result.Items,
                 shape: "backdrop",
                 showTitle: false,
@@ -64,32 +56,25 @@
 
             });
 
-            var elem = page.querySelector('#items');
+            var elem = context.querySelector('#items');
             elem.innerHTML = html;
             ImageLoader.lazyChildren(elem);
 
-            $('.btnNextPage', page).on('click', function () {
-                query.StartIndex += query.Limit;
-                reloadItems(page);
-            });
-
-            $('.btnPreviousPage', page).on('click', function () {
-                query.StartIndex -= query.Limit;
-                reloadItems(page);
-            });
-
-            LibraryBrowser.saveQueryValues(getSavedQueryKey(), query);
-
-            LibraryBrowser.setLastRefreshed(page);
             Dashboard.hideLoadingMsg();
         });
     }
+    return function (view, params, tabContent) {
 
-    window.TvPage.renderStudiosTab = function (page, tabContent) {
+        var self = this;
+        var promise;
 
-        if (LibraryBrowser.needsRefresh(tabContent)) {
-            reloadItems(tabContent);
-        }
+        self.preRender = function () {
+            promise = getPromise(view, params);
+        };
+
+        self.renderTab = function () {
+
+            reloadItems(tabContent, params, promise);
+        };
     };
-
-})(jQuery, document);
+});

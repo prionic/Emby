@@ -1,4 +1,4 @@
-﻿(function ($, document) {
+﻿define(['jQuery', 'listView'], function ($, listView) {
 
     var data = {};
     function getPageData() {
@@ -11,7 +11,7 @@
                     Fields: "PrimaryImageAspectRatio,SyncInfo",
                     EnableImageTypes: "Primary,Backdrop,Banner,Thumb",
                     StartIndex: 0,
-                    Limit: LibraryBrowser.getDefaultPageSize()
+                    Limit: 200
                 },
                 view: LibraryBrowser.getSavedView(key) || LibraryBrowser.getDefaultItemsView('List', 'List')
             };
@@ -31,7 +31,6 @@
 
         return LibraryBrowser.getSavedQueryKey();
     }
-
 
     function reloadItems(page, item) {
 
@@ -57,60 +56,22 @@
 
             });
 
-            var view = getPageData().view;
-
-            if (view == "List") {
-
-                html = LibraryBrowser.getListViewHtml({
-                    items: result.Items,
-                    sortBy: query.SortBy,
-                    showIndex: false,
-                    showRemoveFromPlaylist: true,
-                    playFromHere: true,
-                    defaultAction: 'playallfromhere',
-                    smallIcon: true
-
-                });
-            }
+            html += listView.getListViewHtml({
+                items: result.Items,
+                sortBy: query.SortBy,
+                showIndex: false,
+                showRemoveFromPlaylist: true,
+                playFromHere: true,
+                action: 'playallfromhere',
+                smallIcon: true,
+                dragHandle: true,
+                playlistId: item.Id
+            });
 
             var elem = page.querySelector('#childrenContent .itemsContainer');
             elem.innerHTML = html;
 
-            var listItems = [];
-            var elems = elem.querySelectorAll('PAPER-ICON-ITEM');
-            for (var i = 0, length = elems.length; i < length; i++) {
-                listItems.push(elems[i]);
-            }
-
-            var listParent = elem.querySelector('.paperList');
-
-            if (!AppInfo.isTouchPreferred) {
-                require(['sortable'], function (Sortable) {
-
-                    var sortable = new Sortable(listParent, {
-
-                        draggable: ".listItem",
-
-                        // dragging ended
-                        onEnd: function (/**Event*/evt) {
-
-                            onDrop(evt, page, item);
-                        }
-                    });
-                });
-            }
-
             ImageLoader.lazyChildren(elem);
-            $(elem).createCardMenus();
-
-            $(elem).off('needsrefresh').on('needsrefresh', function () {
-
-                reloadItems(page, item);
-
-            }).off('removefromplaylist').on('removefromplaylist', function (e, playlistItemId) {
-
-                removeFromPlaylist(page, item, [playlistItemId]);
-            });
 
             $('.btnNextPage', elem).on('click', function () {
                 query.StartIndex += query.Limit;
@@ -126,76 +87,28 @@
         });
     }
 
-    function onDrop(evt, page, item) {
+    function init(page, item) {
 
-        var el = evt.item;
+        var elem = page.querySelector('#childrenContent .itemsContainer');
 
-        var newIndex = evt.newIndex;
+        elem.enableDragReordering(true);
 
-        var itemId = el.getAttribute('data-playlistitemid');
-
-        Dashboard.showLoadingMsg();
-
-        ApiClient.ajax({
-
-            url: ApiClient.getUrl('Playlists/' + item.Id + '/Items/' + itemId + '/Move/' + newIndex),
-
-            type: 'POST'
-
-        }).then(function () {
-
-            Dashboard.hideLoadingMsg();
-
-        }, function () {
-
-            Dashboard.hideLoadingMsg();
-            reloadItems(page, item);
-        });
-    }
-
-    function removeFromPlaylist(page, item, ids) {
-
-        ApiClient.ajax({
-
-            url: ApiClient.getUrl('Playlists/' + item.Id + '/Items', {
-                EntryIds: ids.join(',')
-            }),
-
-            type: 'DELETE'
-
-        }).then(function () {
+        elem.addEventListener('needsrefresh', function () {
 
             reloadItems(page, item);
-        });
-
-    }
-
-    function showDragAndDropHelp() {
-
-        if (AppInfo.isTouchPreferred) {
-            // Not implemented for mobile yet
-            return;
-        }
-
-        var expectedValue = "7";
-        if (appStorage.getItem("playlistitemdragdrophelp") == expectedValue) {
-            return;
-        }
-
-        appStorage.setItem("playlistitemdragdrophelp", expectedValue);
-
-        Dashboard.alert({
-            message: Globalize.translate('TryDragAndDropMessage'),
-            title: Globalize.translate('HeaderTryDragAndDrop')
         });
     }
 
     window.PlaylistViewer = {
         render: function (page, item) {
 
+            if (!page.playlistInit) {
+                page.playlistInit = true;
+                init(page, item);
+            }
+
             reloadItems(page, item);
-            showDragAndDropHelp();
         }
     };
 
-})(jQuery, document);
+});

@@ -1,4 +1,4 @@
-﻿(function ($, document, window) {
+﻿define(['jQuery'], function ($) {
 
     function loadPage(page, config) {
 
@@ -27,6 +27,26 @@
 
         // Disable default form submission
         return false;
+    }
+
+    function getTabs() {
+        return [
+        {
+            href: 'syncactivity.html',
+            name: Globalize.translate('TabSyncJobs')
+        },
+         {
+             href: 'devicesupload.html',
+             name: Globalize.translate('TabCameraUpload')
+         },
+        {
+            href: 'appservices.html?context=sync',
+            name: Globalize.translate('TabServices')
+        },
+         {
+             href: 'syncsettings.html',
+             name: Globalize.translate('TabSettings')
+         }];
     }
 
     $(document).on('pageinit', "#syncSettingsPage", function () {
@@ -58,6 +78,7 @@
 
         Dashboard.showLoadingMsg();
 
+        LibraryMenu.setTabs('syncadmin', 3, getTabs);
         var page = this;
 
         ApiClient.getNamedConfiguration("sync").then(function (config) {
@@ -67,4 +88,4 @@
         });
     });
 
-})(jQuery, document, window);
+});

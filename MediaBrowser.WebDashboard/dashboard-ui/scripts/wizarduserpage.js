@@ -1,4 +1,4 @@
-﻿(function ($, document, window) {
+﻿define(['jQuery'], function ($) {
 
     function getApiClient() {
         return ApiClient;
@@ -93,11 +93,11 @@
 
         apiClient.getJSON(apiClient.getUrl('Startup/User')).then(function (user) {
 
-            page.querySelector('#txtUsername').value = user.Name;
-            page.querySelector('#txtConnectUserName').value = user.ConnectUserName;
+            page.querySelector('#txtUsername').value = user.Name || '';
+            page.querySelector('#txtConnectUserName').value = user.ConnectUserName || '';
 
             Dashboard.hideLoadingMsg();
         });
     });
 
-})(jQuery, document, window);
+});

@@ -1,11 +1,10 @@
-﻿(function ($, document) {
+﻿define(['datetime', 'jQuery'], function (datetime, $) {
 
     function revoke(page, key) {
 
-        Dashboard.confirm(Globalize.translate('MessageConfirmRevokeApiKey'), Globalize.translate('HeaderConfirmRevokeApiKey'), function (result) {
+        require(['confirm'], function (confirm) {
 
-            if (result) {
-
+            confirm(Globalize.translate('MessageConfirmRevokeApiKey'), Globalize.translate('HeaderConfirmRevokeApiKey')).then(function () {
                 Dashboard.showLoadingMsg();
 
                 ApiClient.ajax({
@@ -16,7 +15,7 @@
 
                     loadData(page);
                 });
-            }
+            });
 
         });
     }
@@ -60,9 +59,9 @@
 
             html += '<td style="vertical-align:middle;">';
 
-            var date = parseISO8601Date(item.DateCreated, { toLocal: true });
+            var date = datetime.parseISO8601Date(item.DateCreated, true);
 
-            html += date.toLocaleDateString() + ' ' + LibraryBrowser.getDisplayTime(date);
+            html += datetime.toLocaleDateString(date) + ' ' + datetime.getDisplayTime(date);
 
             html += '</td>';
 
@@ -124,6 +123,18 @@
         });
     }
 
+    function getTabs() {
+        return [
+        {
+            href: 'dashboardhosting.html',
+            name: Globalize.translate('TabHosting')
+        },
+         {
+             href: 'serversecurity.html',
+             name: Globalize.translate('TabSecurity')
+         }];
+    }
+
     pageIdOn('pageinit', "serverSecurityPage", function () {
 
         var page = this;
@@ -137,9 +148,10 @@
     });
     pageIdOn('pagebeforeshow', "serverSecurityPage", function () {
 
+        LibraryMenu.setTabs('adminadvanced', 1, getTabs);
         var page = this;
 
         loadData(page);
     });
 
-})(jQuery, document);
+});

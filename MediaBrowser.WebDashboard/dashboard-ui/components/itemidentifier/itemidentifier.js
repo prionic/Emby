@@ -1,17 +1,11 @@
-﻿define(['paperdialoghelper', 'paper-dialog', 'paper-fab', 'paper-input', 'paper-checkbox'], function (paperDialogHelper) {
+﻿define(['dialogHelper', 'loading', 'emby-input', 'emby-checkbox', 'paper-icon-button-light'], function (dialogHelper, loading) {
 
     var currentItem;
-    var currentDeferred;
+    var currentItemType;
+    var currentResolve;
+    var currentReject;
     var hasChanges = false;
     var currentSearchResult;
-
-    function onIdentificationFormSubmitted() {
-
-        var page = $(this).parents('paper-dialog');
-
-        searchForIdentificationResults(page);
-        return false;
-    }
 
     function searchForIdentificationResults(page) {
 
@@ -19,40 +13,43 @@
             ProviderIds: {}
         };
 
-        $('.identifyField', page).each(function () {
+        var i, length;
+        var identifyField = page.querySelectorAll('.identifyField');
+        for (i = 0, length = identifyField.length; i < length; i++) {
 
-            var value = this.value;
+            var value = identifyField[i].value;
 
             if (value) {
 
-                if (this.type == 'number') {
+                if (identifyField[i].type == 'number') {
                     value = parseInt(value);
                 }
 
-                lookupInfo[this.getAttribute('data-lookup')] = value;
+                lookupInfo[identifyField[i].getAttribute('data-lookup')] = value;
             }
-
-        });
+        }
 
         var hasId = false;
 
-        $('.txtLookupId', page).each(function () {
+        var txtLookupId = page.querySelectorAll('.txtLookupId');
+        for (i = 0, length = txtLookupId.length; i < length; i++) {
 
-            var value = this.value;
+            var value = txtLookupId[i].value;
 
             if (value) {
                 hasId = true;
             }
-            lookupInfo.ProviderIds[this.getAttribute('data-providerkey')] = value;
-
-        });
+            lookupInfo.ProviderIds[txtLookupId[i].getAttribute('data-providerkey')] = value;
+        }
 
         if (!hasId && !lookupInfo.Name) {
-            Dashboard.alert(Globalize.translate('MessagePleaseEnterNameOrId'));
+            require(['toast'], function (toast) {
+                toast(Globalize.translate('MessagePleaseEnterNameOrId'));
+            });
             return;
         }
 
-        if (currentItem.GameSystem) {
+        if (currentItem && currentItem.GameSystem) {
             lookupInfo.GameSystem = currentItem.GameSystem;
         }
 
@@ -61,56 +58,74 @@
             IncludeDisabledProviders: true
         };
 
-        Dashboard.showLoadingMsg();
+        loading.show();
 
         ApiClient.ajax({
             type: "POST",
-            url: ApiClient.getUrl("Items/RemoteSearch/" + currentItem.Type),
+            url: ApiClient.getUrl("Items/RemoteSearch/" + currentItemType),
             data: JSON.stringify(lookupInfo),
             contentType: "application/json",
             dataType: 'json'
 
         }).then(function (results) {
 
-            Dashboard.hideLoadingMsg();
+            loading.hide();
             showIdentificationSearchResults(page, results);
         });
     }
 
     function showIdentificationSearchResults(page, results) {
 
-        $('.popupIdentifyForm', page).hide();
-        $('.identificationSearchResults', page).show();
-        $('.identifyOptionsForm', page).hide();
-        $('.btnIdentifyBack', page).show();
+        page.querySelector('.popupIdentifyForm').classList.add('hide');
+        page.querySelector('.identificationSearchResults').classList.remove('hide');
+        page.querySelector('.identifyOptionsForm').classList.add('hide');
 
         var html = '';
-
-        for (var i = 0, length = results.length; i < length; i++) {
+        var i, length;
+        for (i = 0, length = results.length; i < length; i++) {
 
             var result = results[i];
             html += getSearchResultHtml(result, i);
         }
 
-        var elem = $('.identificationSearchResultList', page).html(html).trigger('create');
+        var elem = page.querySelector('.identificationSearchResultList');
+        elem.innerHTML = html;
 
-        $('.searchImage', elem).on('click', function () {
-
+        function onSearchImageClick() {
             var index = parseInt(this.getAttribute('data-index'));
 
             var currentResult = results[index];
 
-            showIdentifyOptions(page, currentResult);
-        });
+            if (currentItem != null) {
+
+                showIdentifyOptions(page, currentResult);
+            } else {
+
+                finishFindNewDialog(page, currentResult);
+            }
+        }
+
+        var searchImages = elem.querySelectorAll('.searchImage');
+        for (i = 0, length = searchImages.length; i < length; i++) {
+
+            searchImages[i].addEventListener('click', onSearchImageClick);
+        }
+    }
+
+    function finishFindNewDialog(dlg, identifyResult) {
+        currentSearchResult = identifyResult;
+        hasChanges = true;
+        loading.hide();
+
+        dialogHelper.close(dlg);
     }
 
     function showIdentifyOptions(page, identifyResult) {
 
-        $('.popupIdentifyForm', page).hide();
-        $('.identificationSearchResults', page).hide();
-        $('.identifyOptionsForm', page).show();
-        $('.btnIdentifyBack', page).show();
-        $('#chkIdentifyReplaceImages', page).checked(true);
+        page.querySelector('.popupIdentifyForm').classList.add('hide');
+        page.querySelector('.identificationSearchResults').classList.add('hide');
+        page.querySelector('.identifyOptionsForm').classList.remove('hide');
+        page.querySelector('#chkIdentifyReplaceImages').checked = true;
 
         currentSearchResult = identifyResult;
 
@@ -133,7 +148,7 @@
             resultHtml = '<img src="' + displayUrl + '" style="max-height:160px;" /><br/>' + resultHtml;
         }
 
-        $('.selectedSearchResult', page).html(resultHtml);
+        page.querySelector('.selectedSearchResult').innerHTML = resultHtml;
     }
 
     function getSearchResultHtml(result, index) {
@@ -141,10 +156,10 @@
         var html = '';
         var cssClass = "card";
 
-        if (currentItem.Type == "Episode") {
+        if (currentItemType == "Episode") {
             cssClass += " backdropCard";
         }
-        else if (currentItem.Type == "MusicAlbum" || currentItem.Type == "MusicArtist") {
+        else if (currentItemType == "MusicAlbum" || currentItemType == "MusicArtist") {
             cssClass += " squareCard";
         }
         else {
@@ -164,7 +179,7 @@
             html += '<div class="cardImage" style="background-image:url(\'' + displayUrl + '\');"></div>';
         } else {
 
-            html += '<div class="cardImage iconCardImage"><iron-icon icon="search"></iron-icon></div>';
+            html += '<div class="cardImage iconCardImage"><i class="md-icon">search</i></div>';
         }
         html += '</a>';
         html += '</div>';
@@ -191,20 +206,12 @@
         return ApiClient.getUrl("Items/RemoteSearch/Image", { imageUrl: url, ProviderName: provider });
     }
 
-    function onIdentificationOptionsSubmit() {
-
-        var page = $(this).parents('paper-dialog');
-
-        submitIdentficationResult(page);
-        return false;
-    }
-
     function submitIdentficationResult(page) {
 
-        Dashboard.showLoadingMsg();
+        loading.show();
 
         var options = {
-            ReplaceAllImages: $('#chkIdentifyReplaceImages', page).checked()
+            ReplaceAllImages: page.querySelector('#chkIdentifyReplaceImages').checked
         };
 
         ApiClient.ajax({
@@ -216,22 +223,16 @@
         }).then(function () {
 
             hasChanges = true;
-            Dashboard.hideLoadingMsg();
+            loading.hide();
 
-            paperDialogHelper.close(document.querySelector('.identifyDialog'));
+            dialogHelper.close(page);
 
         }, function () {
 
-            Dashboard.hideLoadingMsg();
+            loading.hide();
 
-            paperDialogHelper.close(document.querySelector('.identifyDialog'));
+            dialogHelper.close(page);
         });
-    }
-
-    function initEditor(page) {
-
-        $('.popupIdentifyForm', page).off('submit', onIdentificationFormSubmitted).on('submit', onIdentificationFormSubmitted);
-        $('.identifyOptionsForm', page).off('submit', onIdentificationOptionsSubmit).on('submit', onIdentificationOptionsSubmit);
     }
 
     function showIdentificationForm(page, item) {
@@ -248,30 +249,30 @@
 
                 var id = "txtLookup" + idInfo.Key;
 
-                html += '<div>';
+                html += '<div class="inputContainer">';
 
                 var idLabel = Globalize.translate('LabelDynamicExternalId').replace('{0}', idInfo.Name);
 
                 var value = providerIds[idInfo.Key] || '';
 
-                html += '<paper-input class="txtLookupId" value="' + value + '" data-providerkey="' + idInfo.Key + '" id="' + id + '" label="' + idLabel + '"></paper-input>';
+                html += '<input is="emby-input" class="txtLookupId" data-providerkey="' + idInfo.Key + '" id="' + id + '" label="' + idLabel + '"/>';
 
                 html += '</div>';
             }
 
-            $('#txtLookupName', page).val(item.Name);
+            page.querySelector('#txtLookupName').value = '';
 
             if (item.Type == "Person" || item.Type == "BoxSet") {
 
-                $('.fldLookupYear', page).hide();
-                $('#txtLookupYear', page).val('');
+                page.querySelector('.fldLookupYear').classList.add('hide');
+                page.querySelector('#txtLookupYear').value = '';
             } else {
 
-                $('.fldLookupYear', page).show();
-                $('#txtLookupYear', page).val(item.ProductionYear);
+                page.querySelector('.fldLookupYear').classList.remove('hide');
+                page.querySelector('#txtLookupYear').value = '';
             }
 
-            $('.identifyProviderIds', page).html(html).trigger('create');
+            page.querySelector('.identifyProviderIds').innerHTML = html;
 
             page.querySelector('.dialogHeaderTitle').innerHTML = Globalize.translate('HeaderIdentify');
         });
@@ -279,7 +280,7 @@
 
     function showEditor(itemId) {
 
-        Dashboard.showLoadingMsg();
+        loading.show();
 
         var xhr = new XMLHttpRequest();
         xhr.open('GET', 'components/itemidentifier/itemidentifier.template.html', true);
@@ -287,12 +288,14 @@
         xhr.onload = function (e) {
 
             var template = this.response;
-            ApiClient.getItem(Dashboard.getCurrentUserId(), itemId).then(function (item) {
+            ApiClient.getItem(ApiClient.getCurrentUserId(), itemId).then(function (item) {
 
                 currentItem = item;
+                currentItemType = currentItem.Type;
 
-                var dlg = paperDialogHelper.createDialog({
-                    size: 'medium'
+                var dlg = dialogHelper.createDialog({
+                    size: 'medium',
+                    removeOnClose: true
                 });
 
                 dlg.classList.add('ui-body-b');
@@ -305,21 +308,33 @@
                 document.body.appendChild(dlg);
 
                 // Has to be assigned a z-index after the call to .open() 
-                $(dlg).on('iron-overlay-closed', onDialogClosed);
+                dlg.addEventListener('close', onDialogClosed);
 
-                paperDialogHelper.open(dlg);
+                dialogHelper.open(dlg);
 
-                initEditor(dlg);
+                dlg.querySelector('.popupIdentifyForm').addEventListener('submit', function (e) {
 
-                $('.btnCancel', dlg).on('click', function () {
+                    e.preventDefault();
+                    searchForIdentificationResults(dlg);
+                    return false;
+                });
 
-                    paperDialogHelper.close(dlg);
+                dlg.querySelector('.identifyOptionsForm').addEventListener('submit', function (e) {
+
+                    e.preventDefault();
+                    submitIdentficationResult(dlg);
+                    return false;
+                });
+
+                dlg.querySelector('.btnCancel').addEventListener('click', function (e) {
+
+                    dialogHelper.close(dlg);
                 });
 
                 dlg.classList.add('identifyDialog');
 
                 showIdentificationForm(dlg, item);
-                Dashboard.hideLoadingMsg();
+                loading.hide();
             });
         }
 
@@ -328,21 +343,106 @@
 
     function onDialogClosed() {
 
-        $(this).remove();
-        Dashboard.hideLoadingMsg();
-        currentDeferred.resolveWith(null, [hasChanges]);
+        loading.hide();
+        if (hasChanges) {
+            currentResolve();
+        } else {
+            currentReject();
+        }
+    }
+
+    function showEditorFindNew(itemName, itemYear, itemType, resolveFunc) {
+
+        currentItem = null;
+        currentItemType = itemType;
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'components/itemidentifier/itemidentifier.template.html', true);
+
+        xhr.onload = function (e) {
+
+            var template = this.response;
+
+            var dlg = dialogHelper.createDialog({
+                size: 'medium'
+            });
+
+            dlg.classList.add('ui-body-a');
+            dlg.classList.add('background-theme-a');
+
+            var html = '';
+            html += Globalize.translateDocument(template);
+
+            dlg.innerHTML = html;
+            document.body.appendChild(dlg);
+
+            dialogHelper.open(dlg);
+
+            dlg.querySelector('.btnCancel').addEventListener('click', function (e) {
+
+                dialogHelper.close(dlg);
+            });
+
+            dlg.querySelector('.popupIdentifyForm').addEventListener('submit', function (e) {
+
+                e.preventDefault();
+                searchForIdentificationResults(dlg);
+                return false;
+            });
+
+            dlg.addEventListener('close', function () {
+
+                loading.hide();
+                var foundItem = hasChanges ? currentSearchResult : null;
+
+                resolveFunc(foundItem);
+            });
+
+            dlg.classList.add('identifyDialog');
+
+            showIdentificationFormFindNew(dlg, itemName, itemYear, itemType);
+        }
+
+        xhr.send();
+    }
+
+    function showIdentificationFormFindNew(dlg, itemName, itemYear, itemType) {
+
+        dlg.querySelector('#txtLookupName').value = itemName;
+
+        if (itemType == "Person" || itemType == "BoxSet") {
+
+            dlg.querySelector('.fldLookupYear').classList.add('hide');
+            dlg.querySelector('#txtLookupYear').value = '';
+
+        } else {
+
+            dlg.querySelector('.fldLookupYear').classList.remove('hide');
+            dlg.querySelector('#txtLookupYear').value = itemYear;
+        }
+
+        dlg.querySelector('.dialogHeaderTitle').innerHTML = Globalize.translate('HeaderSearch');
     }
 
     return {
         show: function (itemId) {
 
-            var deferred = DeferredBuilder.Deferred();
+            return new Promise(function (resolve, reject) {
 
-            currentDeferred = deferred;
-            hasChanges = false;
+                currentResolve = resolve;
+                currentReject = reject;
+                hasChanges = false;
 
-            showEditor(itemId);
-            return deferred.promise();
+                showEditor(itemId);
+            });
+        },
+
+        showFindNew: function (itemName, itemYear, itemType) {
+            return new Promise(function (resolve, reject) {
+
+                hasChanges = false;
+                showEditorFindNew(itemName, itemYear, itemType, resolve);
+            });
         }
     };
 });

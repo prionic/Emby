@@ -1,4 +1,4 @@
-﻿(function ($, document, window) {
+﻿define(['historyManager', 'jQuery'], function (historyManager, $) {
 
     var currentItemId;
 
@@ -12,9 +12,9 @@
         currentItemId = itemId;
 
         if (itemId) {
-            require(['components/metadataeditor/metadataeditor'], function (metadataeditor) {
+            require(['metadataEditor'], function (metadataEditor) {
 
-                metadataeditor.embed(page.querySelector('.editPageInnerContent'), itemId);
+                metadataEditor.embed(page.querySelector('.editPageInnerContent'), itemId, ApiClient.serverInfo().Id);
             });
         } else {
             page.querySelector('.editPageInnerContent').innerHTML = '';
@@ -26,12 +26,13 @@
 
         var page = this;
 
+        MetadataEditor.setCurrentItemId(null);
+
         $('.libraryTree', page).on('itemclicked', function (event, data) {
 
             if (data.id != currentItemId) {
 
-                //$.mobile.urlHistory.ignoreNextHashChange = true;
-                window.location.hash = 'editItemMetadataPage?id=' + data.id;
+                MetadataEditor.setCurrentItemId(data.id);
                 reload(page);
             }
         });
@@ -47,5 +48,4 @@
         var page = this;
     });
 
-})(jQuery, document, window);
-
+});

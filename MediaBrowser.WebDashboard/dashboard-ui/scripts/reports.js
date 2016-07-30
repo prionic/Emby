@@ -1,4 +1,5 @@
-﻿(function ($, document) {
+﻿define(['jQuery', 'libraryBrowser'], function ($, libraryBrowser) {
+
     var defaultSortBy = "SortName";
     var topItems = 5;
 
@@ -130,7 +131,7 @@
                 break;
             case "LockDataImage":
                 if (rRow.HasLockData) {
-                    html += '<img src="css/images/editor/lock.png"  style="width:18px"/>';
+                    html += '<i class="md-icon">lock</i>';
                 }
                 break;
             case "TagsPrimaryImage":
@@ -168,11 +169,11 @@
                 break;
             case "StatusImage":
                 if (rRow.HasLockData) {
-                    html += '<img src="css/images/editor/lock.png"  style="width:18px"/>';
+                    html += '<i class="md-icon">lock</i>';
                 }
 
                 if (!rRow.HasLocalTrailer && rRow.RowType === "Movie") {
-                    html += '<img src="css/images/editor/missingtrailer.png" title="Missing local trailer."  style="width:18px"/>';
+                    html += '<i title="Missing local trailer." class="md-icon">videocam</i>';
                 }
 
                 if (!rRow.HasImageTagsPrimary) {
@@ -310,7 +311,7 @@
             $('#tabFilter', page).hide();
         }
 
-        var pagingHtml = LibraryBrowser.getQueryPagingHtml({
+        var pagingHtml = libraryBrowser.getQueryPagingHtml({
             startIndex: query.StartIndex,
             limit: query.Limit,
             totalRecordCount: result.TotalRecordCount,
@@ -323,7 +324,7 @@
 
 
             $('.listTopPaging', page).html(pagingHtml).trigger('create');
-           // page.querySelector('.listTopPaging').innerHTML = pagingHtml;
+            // page.querySelector('.listTopPaging').innerHTML = pagingHtml;
             $('.listTopPaging', page).show();
 
             $('.listBottomPaging', page).html(pagingHtml).trigger('create');
@@ -501,7 +502,6 @@
         //Management
         $('#chkMissingRating', page).checked(query.HasOfficialRating == false).checkboxradio('refresh');
         $('#chkMissingOverview', page).checked(query.HasOverview == false).checkboxradio('refresh');
-        $('#chkYearMismatch', page).checked(query.IsYearMismatched == true).checkboxradio('refresh');
         $('#chkIsLocked', page).checked(query.IsLocked == true).checkboxradio('refresh');
         $('#chkMissingImdbId', page).checked(query.HasImdbId == false).checkboxradio('refresh');
         $('#chkMissingTmdbId', page).checked(query.HasTmdbId == false).checkboxradio('refresh');
@@ -525,7 +525,7 @@
             $('#isFavorite').val("-");
         }
 
-        
+
     }
 
     var filtersLoaded;
@@ -812,14 +812,6 @@
             reloadItems(page);
         });
 
-        $('#chkYearMismatch', page).on('change', function () {
-
-            query.StartIndex = 0;
-            query.IsYearMismatched = this.checked ? true : null;
-
-            reloadItems(page);
-        });
-
         //Episodes
         $('#chkMissingEpisode', page).on('change', function () {
 
@@ -909,10 +901,6 @@
 	    filtersLoaded = false;
 	    updateFilterControls(this);
 	});
-
-})(jQuery, document);
-
-(function (window) {
 
     function renderOptions(page, selector, cssClass, items) {
 
@@ -1145,4 +1133,4 @@
         loadColumns: loadColumns,
         onPageShow: onPageReportColumnsShow
     };
-})(window);
+});

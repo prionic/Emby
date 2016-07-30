@@ -15,7 +15,6 @@
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{786C830F-07A1-408B-BD7F-6EE04809D6DB};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\</SolutionDir>
-    <FodyPath>..\packages\Fody.1.19.1.0</FodyPath>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <UpgradeBackupLocation>
@@ -37,6 +36,8 @@
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
     <RestorePackages>true</RestorePackages>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -58,14 +59,6 @@
   <ItemGroup>
     <!-- A reference to the entire .NET Framework is automatically included -->
     <None Include="app.config" />
-    <None Include="Fody.targets" />
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="PropertyChanged">
-      <HintPath>..\packages\PropertyChanged.Fody.1.41.0.0\Lib\portable-net4+sl4+wp7+win8+MonoAndroid16+MonoTouch40\PropertyChanged.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\MediaBrowser.Model\Activity\ActivityLogEntry.cs">
@@ -239,12 +232,6 @@
     <Compile Include="..\MediaBrowser.Model\Configuration\SubtitlePlaybackMode.cs">
       <Link>Configuration\SubtitlePlaybackMode.cs</Link>
     </Compile>
-    <Compile Include="..\MediaBrowser.Model\Configuration\TheMovieDbOptions.cs">
-      <Link>Configuration\TheMovieDbOptions.cs</Link>
-    </Compile>
-    <Compile Include="..\MediaBrowser.Model\Configuration\TvdbOptions.cs">
-      <Link>Configuration\TvdbOptions.cs</Link>
-    </Compile>
     <Compile Include="..\MediaBrowser.Model\Configuration\UnratedItem.cs">
       <Link>Configuration\UnratedItem.cs</Link>
     </Compile>
@@ -359,17 +346,14 @@
     <Compile Include="..\MediaBrowser.Model\Dlna\HttpHeaderInfo.cs">
       <Link>Dlna\HttpHeaderInfo.cs</Link>
     </Compile>
-    <Compile Include="..\MediaBrowser.Model\Dlna\ILocalPlayer.cs">
-      <Link>Dlna\ILocalPlayer.cs</Link>
+    <Compile Include="..\MediaBrowser.Model\Dlna\ITranscoderSupport.cs">
+      <Link>Dlna\ITranscoderSupport.cs</Link>
     </Compile>
     <Compile Include="..\MediaBrowser.Model\Dlna\MediaFormatProfile.cs">
       <Link>Dlna\MediaFormatProfile.cs</Link>
     </Compile>
     <Compile Include="..\MediaBrowser.Model\Dlna\MediaFormatProfileResolver.cs">
       <Link>Dlna\MediaFormatProfileResolver.cs</Link>
-    </Compile>
-    <Compile Include="..\MediaBrowser.Model\Dlna\NullLocalPlayer.cs">
-      <Link>Dlna\NullLocalPlayer.cs</Link>
     </Compile>
     <Compile Include="..\MediaBrowser.Model\Dlna\PlaybackErrorCode.cs">
       <Link>Dlna\PlaybackErrorCode.cs</Link>
@@ -478,9 +462,6 @@
     </Compile>
     <Compile Include="..\MediaBrowser.Model\Dto\ImageOptions.cs">
       <Link>Dto\ImageOptions.cs</Link>
-    </Compile>
-    <Compile Include="..\MediaBrowser.Model\Dto\ItemByNameCounts.cs">
-      <Link>Dto\ItemByNameCounts.cs</Link>
     </Compile>
     <Compile Include="..\MediaBrowser.Model\Dto\ItemCounts.cs">
       <Link>Dto\ItemCounts.cs</Link>
@@ -617,9 +598,6 @@
     <Compile Include="..\MediaBrowser.Model\Entities\Video3DFormat.cs">
       <Link>Entities\Video3DFormat.cs</Link>
     </Compile>
-    <Compile Include="..\MediaBrowser.Model\Entities\VideoSize.cs">
-      <Link>Entities\VideoSize.cs</Link>
-    </Compile>
     <Compile Include="..\MediaBrowser.Model\Entities\VideoType.cs">
       <Link>Entities\VideoType.cs</Link>
     </Compile>
@@ -637,9 +615,6 @@
     </Compile>
     <Compile Include="..\MediaBrowser.Model\Extensions\FloatHelper.cs">
       <Link>Extensions\FloatHelper.cs</Link>
-    </Compile>
-    <Compile Include="..\MediaBrowser.Model\Extensions\IHasPropertyChangedEvent.cs">
-      <Link>Extensions\IHasPropertyChangedEvent.cs</Link>
     </Compile>
     <Compile Include="..\MediaBrowser.Model\Extensions\IntHelper.cs">
       <Link>Extensions\IntHelper.cs</Link>
@@ -673,9 +648,6 @@
     </Compile>
     <Compile Include="..\MediaBrowser.Model\FileOrganization\TvFileOrganizationOptions.cs">
       <Link>FileOrganization\TvFileOrganizationOptions.cs</Link>
-    </Compile>
-    <Compile Include="..\MediaBrowser.Model\Games\GameSystem.cs">
-      <Link>Games\GameSystem.cs</Link>
     </Compile>
     <Compile Include="..\MediaBrowser.Model\Globalization\CountryInfo.cs">
       <Link>Globalization\CountryInfo.cs</Link>
@@ -1160,6 +1132,9 @@
     <Compile Include="..\MediaBrowser.Model\Sync\SyncTarget.cs">
       <Link>Sync\SyncTarget.cs</Link>
     </Compile>
+    <Compile Include="..\MediaBrowser.Model\System\Architecture.cs">
+      <Link>System\Architecture.cs</Link>
+    </Compile>
     <Compile Include="..\MediaBrowser.Model\System\LogFile.cs">
       <Link>System\LogFile.cs</Link>
     </Compile>
@@ -1254,7 +1229,6 @@
     <PostBuildEvent>
     </PostBuildEvent>
   </PropertyGroup>
-  <Import Project="Fody.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

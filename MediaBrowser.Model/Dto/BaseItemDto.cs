@@ -18,13 +18,15 @@ namespace MediaBrowser.Model.Dto
     /// This holds information about a BaseItem in a format that is convenient for the client.
     /// </summary>
     [DebuggerDisplay("Name = {Name}, ID = {Id}, Type = {Type}")]
-    public class BaseItemDto : IHasProviderIds, IHasPropertyChangedEvent, IItemDto, IHasServerId, IHasSyncInfo
+    public class BaseItemDto : IHasProviderIds, IItemDto, IHasServerId, IHasSyncInfo
     {
         /// <summary>
         /// Gets or sets the name.
         /// </summary>
         /// <value>The name.</value>
         public string Name { get; set; }
+
+        public string OriginalTitle { get; set; }
 
         /// <summary>
         /// Gets or sets the server identifier.
@@ -43,6 +45,12 @@ namespace MediaBrowser.Model.Dto
         /// </summary>
         /// <value>The etag.</value>
         public string Etag { get; set; }
+
+        /// <summary>
+        /// Gets or sets the type of the source.
+        /// </summary>
+        /// <value>The type of the source.</value>
+        public string SourceType { get; set; }
         
         /// <summary>
         /// Gets or sets the playlist item identifier.
@@ -105,6 +113,8 @@ namespace MediaBrowser.Model.Dto
         /// </summary>
         /// <value>The synchronize percent.</value>
         public double? SyncPercent { get; set; }
+
+        public string Container { get; set; }
 
         /// <summary>
         /// Gets or sets the DVD season number.
@@ -207,12 +217,6 @@ namespace MediaBrowser.Model.Dto
         public string ShortOverview { get; set; }
 
         /// <summary>
-        /// Gets or sets the name of the TMDB collection.
-        /// </summary>
-        /// <value>The name of the TMDB collection.</value>
-        public string TmdbCollectionName { get; set; }
-
-        /// <summary>
         /// Gets or sets the taglines.
         /// </summary>
         /// <value>The taglines.</value>
@@ -289,6 +293,13 @@ namespace MediaBrowser.Model.Dto
         /// </summary>
         /// <value><c>null</c> if [is place holder] contains no value, <c>true</c> if [is place holder]; otherwise, <c>false</c>.</value>
         public bool? IsPlaceHolder { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number.
+        /// </summary>
+        /// <value>The number.</value>
+        public string Number { get; set; }
+        public string ChannelNumber { get; set; }
 
         /// <summary>
         /// Gets or sets the index number.
@@ -793,6 +804,11 @@ namespace MediaBrowser.Model.Dto
         public List<MetadataFields> LockedFields { get; set; }
 
         /// <summary>
+        /// Gets or sets the trailer count.
+        /// </summary>
+        /// <value>The trailer count.</value>
+        public int? TrailerCount { get; set; }
+        /// <summary>
         /// Gets or sets the movie count.
         /// </summary>
         /// <value>The movie count.</value>
@@ -941,6 +957,16 @@ namespace MediaBrowser.Model.Dto
         }
 
         /// <summary>
+        /// Gets a value indicating whether this instance has thumb.
+        /// </summary>
+        /// <value><c>true</c> if this instance has thumb; otherwise, <c>false</c>.</value>
+        [IgnoreDataMember]
+        public bool HasBackdrop
+        {
+            get { return (BackdropImageTags != null && BackdropImageTags.Count > 0) || (ParentBackdropImageTags != null && ParentBackdropImageTags.Count > 0); }
+        }
+
+        /// <summary>
         /// Gets a value indicating whether this instance has primary image.
         /// </summary>
         /// <value><c>true</c> if this instance has primary image; otherwise, <c>false</c>.</value>
@@ -1084,11 +1110,6 @@ namespace MediaBrowser.Model.Dto
                 return IsType("Movie") || IsType("Series") || IsType("MusicAlbum") || IsType("MusicArtist") || IsType("Program") || IsType("Recording") || IsType("ChannelVideoItem") || IsType("Game");
             }
         }
-
-        /// <summary>
-        /// Occurs when [property changed].
-        /// </summary>
-        public event PropertyChangedEventHandler PropertyChanged;
 
         /// <summary>
         /// Gets or sets the program identifier.

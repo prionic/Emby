@@ -1,19 +1,21 @@
-﻿(function (document, window, $) {
+﻿define(['jQuery', 'paper-icon-button-light'], function ($) {
 
     function deleteUser(page, id) {
 
         var msg = Globalize.translate('DeleteUserConfirmation');
 
-        Dashboard.confirm(msg, Globalize.translate('DeleteUser'), function (result) {
+        require(['confirm'], function (confirm) {
 
-            if (result) {
+            confirm(msg, Globalize.translate('DeleteUser')).then(function () {
+
                 Dashboard.showLoadingMsg();
 
                 ApiClient.deleteUser(id).then(function () {
 
                     loadData(page);
                 });
-            }
+            });
+
         });
     }
 
@@ -120,7 +122,7 @@
         html += '<div class="' + imageClass + '" style="background-image:url(\'' + imgUrl + '\');">';
 
         if (user.ConnectUserId && addConnectIndicator) {
-            html += '<div class="playedIndicator" title="' + Globalize.translate('TooltipLinkedToEmbyConnect') + '"><iron-icon icon="cloud"></iron-icon></div>';
+            html += '<div class="playedIndicator" title="' + Globalize.translate('TooltipLinkedToEmbyConnect') + '"><i class="md-icon">cloud</i></div>';
         }
 
         html += "</div>";
@@ -134,7 +136,7 @@
         html += '<div class="cardFooter">';
 
         html += '<div class="cardText" style="text-align:right; float:right;padding:0;">';
-        html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnUserMenu"></paper-icon-button>';
+        html += '<button type="button" is="paper-icon-button-light" class="btnUserMenu autoSize"><i class="md-icon">' + AppInfo.moreIcon.replace('-', '_') + '</i></button>';
         html += "</div>";
 
         html += '<div class="cardText" style="padding-top:10px;padding-bottom:10px;">';
@@ -170,7 +172,7 @@
 
         var html = getUserSectionHtml(users, addConnectIndicator);
 
-        elem.html(html).trigger('create');
+        elem.html(html);
 
         $('.btnUserMenu', elem).on('click', function () {
             showUserMenu(this);
@@ -253,7 +255,7 @@
         html += '<div class="cardFooter">';
 
         html += '<div class="cardText" style="text-align:right; float:right;padding:0;">';
-        html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnUserMenu"></paper-icon-button>';
+        html += '<button type="button" is="paper-icon-button-light" class="btnUserMenu"><iron-icon icon="' + AppInfo.moreIcon + '"></iron-icon></button>';
         html += "</div>";
 
         html += '<div class="cardText" style="padding-top:10px;padding-bottom:10px;">';
@@ -282,7 +284,7 @@
 
         var html = users.map(getPendingUserHtml).join('');
 
-        var elem = $('.pending', page).html(html).trigger('create');
+        var elem = $('.pending', page).html(html);
 
         $('.btnUserMenu', elem).on('click', function () {
             showPendingUserMenu(this);
@@ -325,23 +327,23 @@
         });
     }
 
+    function showLinkUser(page, userId) {
+        
+        require(['components/guestinviter/connectlink'], function (connectlink) {
+
+            connectlink.show().then(function () {
+                loadData(page);
+            });
+        });
+    }
+
     function showInvitePopup(page) {
 
         Dashboard.getCurrentUser().then(function (user) {
 
             if (!user.ConnectUserId) {
 
-                var msg = Globalize.translate('MessageConnectAccountRequiredToInviteGuest');
-
-                msg += '<br/>';
-                msg += '<br/>';
-                msg += '<a href="useredit.html?userId=' + user.Id + '">' + Globalize.translate('ButtonLinkMyEmbyAccount') + '</a>';
-                msg += '<br/>';
-
-                Dashboard.alert({
-                    message: msg,
-                    title: Globalize.translate('HeaderInviteGuest')
-                });
+                showLinkUser(page, user.Id);
                 return;
             }
 
@@ -375,4 +377,4 @@
         loadData(page);
     });
 
-})(document, window, jQuery);
+});

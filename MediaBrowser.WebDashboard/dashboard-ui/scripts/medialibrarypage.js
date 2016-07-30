@@ -1,10 +1,12 @@
-﻿(function () {
+﻿define(['jQuery', 'apphost'], function ($, appHost) {
 
     function changeCollectionType(page, virtualFolder) {
 
-        Dashboard.alert({
-            message: Globalize.translate('HeaderChangeFolderTypeHelp'),
-            title: Globalize.translate('HeaderChangeFolderType')
+        require(['alert'], function (alert) {
+            alert({
+                title: Globalize.translate('HeaderChangeFolderType'),
+                text: Globalize.translate('HeaderChangeFolderTypeHelp')
+            });
         });
     }
 
@@ -53,17 +55,16 @@
             msg += virtualFolder.Locations.join("<br/>");
         }
 
-        Dashboard.confirm(msg, Globalize.translate('HeaderRemoveMediaFolder'), function (confirmResult) {
+        require(['confirm'], function (confirm) {
 
-            if (confirmResult) {
+            confirm(msg, Globalize.translate('HeaderRemoveMediaFolder')).then(function () {
 
                 var refreshAfterChange = shouldRefreshLibraryAfterChanges(page);
 
                 ApiClient.removeVirtualFolder(virtualFolder.Name, refreshAfterChange).then(function () {
                     reloadLibrary(page);
                 });
-            }
-
+            });
         });
     }
 
@@ -103,9 +104,15 @@
         });
 
         menuItems.push({
+            name: Globalize.translate('ButtonEditImages'),
+            id: 'editimages',
+            ironIcon: 'photo'
+        });
+
+        menuItems.push({
             name: Globalize.translate('ButtonManageFolders'),
             id: 'edit',
-            ironIcon: 'folder-open'
+            ironIcon: 'folder_open'
         });
 
         menuItems.push({
@@ -117,7 +124,7 @@
         menuItems.push({
             name: Globalize.translate('ButtonRename'),
             id: 'rename',
-            ironIcon: 'mode-edit'
+            ironIcon: 'mode_edit'
         });
 
         require(['actionsheet'], function (actionsheet) {
@@ -134,6 +141,9 @@
                             break;
                         case 'edit':
                             editVirtualFolder(page, virtualFolder);
+                            break;
+                        case 'editimages':
+                            editImages(page, virtualFolder);
                             break;
                         case 'rename':
                             renameVirtualFolder(page, virtualFolder);
@@ -170,7 +180,7 @@
 
         virtualFolders.push({
             Name: Globalize.translate('ButtonAddMediaLibrary'),
-            icon: 'add-circle',
+            icon: 'add_circle',
             Locations: [],
             showType: false,
             showLocations: false,
@@ -205,19 +215,22 @@
                 return;
             }
 
-            require(['components/imageeditor/imageeditor'], function (ImageEditor) {
-
-                ImageEditor.show(virtualFolder.ItemId, {
-                    theme: 'a'
-                }).then(function (hasChanged) {
-                    if (hasChanged) {
-                        reloadLibrary(page);
-                    }
-                });
-            });
+            editVirtualFolder(page, virtualFolder);
         });
 
         Dashboard.hideLoadingMsg();
+    }
+
+    function editImages(page, virtualFolder) {
+
+        require(['components/imageeditor/imageeditor'], function (ImageEditor) {
+
+            ImageEditor.show(virtualFolder.ItemId, {
+                theme: 'a'
+            }).then(function () {
+                reloadLibrary(page);
+            });
+        });
     }
 
     function getCollectionTypeOptions() {
@@ -300,7 +313,7 @@
             html += '<div class="cardImage editLibrary" style="cursor:pointer;background-image:url(\'' + imgUrl + '\');"></div>';
         } else if (!virtualFolder.showNameWithIcon) {
             html += '<div class="cardImage editLibrary iconCardImage" style="cursor:pointer;">';
-            html += '<iron-icon icon="' + (virtualFolder.icon || getIcon(virtualFolder.CollectionType)) + '"></iron-icon>';
+            html += '<i class="md-icon">' + (virtualFolder.icon || getIcon(virtualFolder.CollectionType)) + '</i>';
 
             html += '</div>';
         }
@@ -315,7 +328,7 @@
             html += '<h1 class="cardImage iconCardImage addLibrary" style="position:absolute;top:0;left:0;right:0;bottom:0;cursor:pointer;">';
 
             html += '<div>';
-            html += '<iron-icon icon="' + (virtualFolder.icon || getIcon(virtualFolder.CollectionType)) + '" style="width:45%;height:45%;color:#888;"></iron-icon>';
+            html += '<i class="md-icon" style="font-size:400%;color:#888;">' + (virtualFolder.icon || getIcon(virtualFolder.CollectionType)) + '</i>';
 
             if (virtualFolder.showNameWithIcon) {
                 html += '<div style="margin:1.5em 0;position:width:100%;font-weight:500;color:#444;">';
@@ -330,8 +343,10 @@
         html += '<div class="cardFooter">';
 
         if (virtualFolder.showMenu !== false) {
+            var moreIcon = appHost.moreIcon == 'dots-horiz' ? '&#xE5D3;' : '&#xE5D4;';
+
             html += '<div class="cardText" style="text-align:right; float:right;padding-top:5px;">';
-            html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnCardMenu"></paper-icon-button>';
+            html += '<button type="button" is="paper-icon-button-light" class="btnCardMenu autoSize"><i class="md-icon">' + moreIcon + '</i></button>';
             html += "</div>";
         }
 
@@ -418,6 +433,46 @@
         });
     });
 
+    window.WizardLibraryPage = {
+
+        next: function () {
+
+            Dashboard.showLoadingMsg();
+
+            var apiClient = ApiClient;
+
+            apiClient.ajax({
+                type: "POST",
+                url: apiClient.getUrl('System/Configuration/MetadataPlugins/Autoset')
+
+            }).then(function () {
+
+                Dashboard.hideLoadingMsg();
+                Dashboard.navigate('wizardsettings.html');
+            });
+        }
+    };
+
+    function getTabs() {
+        return [
+        {
+            href: 'library.html',
+            name: Globalize.translate('TabFolders')
+        },
+         {
+             href: 'librarydisplay.html',
+             name: Globalize.translate('TabDisplay')
+         },
+         {
+             href: 'librarypathmapping.html',
+             name: Globalize.translate('TabPathSubstitution')
+         },
+         {
+             href: 'librarysettings.html',
+             name: Globalize.translate('TabAdvanced')
+         }];
+    }
+
     pageClassOn('pageshow', "mediaLibraryPage", function () {
 
         var page = this;
@@ -425,32 +480,9 @@
 
     });
 
-})();
-
-var WizardLibraryPage = {
-
-    next: function () {
-
-        Dashboard.showLoadingMsg();
-
-        var apiClient = ApiClient;
-
-        apiClient.ajax({
-            type: "POST",
-            url: apiClient.getUrl('System/Configuration/MetadataPlugins/Autoset')
-
-        }).then(function () {
-
-            Dashboard.hideLoadingMsg();
-            Dashboard.navigate('wizardsettings.html');
-        });
-    }
-};
-
-(function ($, document, window) {
-
     pageIdOn('pageshow', "mediaLibraryPage", function () {
 
+        LibraryMenu.setTabs('librarysetup', 0, getTabs);
         var page = this;
 
         // on here
@@ -473,4 +505,4 @@ var WizardLibraryPage = {
 
     });
 
-})(jQuery, document, window);
+});

@@ -1,4 +1,66 @@
-﻿define(['isMobile'], function (isMobile) {
+﻿define([], function () {
+
+    function isTv() {
+
+        // This is going to be really difficult to get right
+        var userAgent = navigator.userAgent.toLowerCase();
+
+        if (userAgent.indexOf('tv') != -1) {
+            return true;
+        }
+
+        if (userAgent.indexOf('samsungbrowser') != -1) {
+            return true;
+        }
+
+        if (userAgent.indexOf('nintendo') != -1) {
+            return true;
+        }
+
+        if (userAgent.indexOf('viera') != -1) {
+            return true;
+        }
+
+        if (userAgent.indexOf('webos') != -1) {
+            return true;
+        }
+
+        return false;
+    }
+
+    function isStyleSupported(prop, value) {
+        // If no value is supplied, use "inherit"
+        value = arguments.length === 2 ? value : 'inherit';
+        // Try the native standard method first
+        if ('CSS' in window && 'supports' in window.CSS) {
+            return window.CSS.supports(prop, value);
+        }
+        // Check Opera's native method
+        if ('supportsCSS' in window) {
+            return window.supportsCSS(prop, value);
+        }
+
+        // need try/catch because it's failing on tizen
+
+        try {
+            // Convert to camel-case for DOM interactions
+            var camel = prop.replace(/-([a-z]|[0-9])/ig, function (all, letter) {
+                return (letter + '').toUpperCase();
+            });
+            // Check if the property is supported
+            var support = (camel in el.style);
+            // Create test element
+            var el = document.createElement('div');
+            // Assign the property and value to invoke
+            // the CSS interpreter
+            el.style.cssText = prop + ':' + value;
+            // Ensure both the property and value are
+            // supported and return
+            return support && (el.style[camel] !== '');
+        } catch (err) {
+            return false;
+        }
+    }
 
     var uaMatch = function (ua) {
         ua = ua.toLowerCase();
@@ -61,11 +123,28 @@
         browser.safari = true;
     }
 
-    if (isMobile.any) {
+    if (userAgent.toLowerCase().indexOf("playstation 4") != -1) {
+        browser.ps4 = true;
+        browser.tv = true;
+    }
+
+    if (userAgent.toLowerCase().indexOf("mobi") != -1) {
         browser.mobile = true;
     }
 
+    browser.xboxOne = userAgent.toLowerCase().indexOf('xbox') != -1;
     browser.animate = document.documentElement.animate != null;
+    browser.tizen = userAgent.toLowerCase().indexOf('tizen') != -1 || userAgent.toLowerCase().indexOf('smarthub') != -1;
+    browser.web0s = userAgent.toLowerCase().indexOf('Web0S'.toLowerCase()) != -1;
+
+    browser.tv = isTv();
+    browser.operaTv = browser.tv && userAgent.toLowerCase().indexOf('opr/') != -1;
+
+    if (!isStyleSupported('display', 'flex')) {
+        browser.noFlex = true;
+    }
+
+    //browser.noFlex = (browser.tv && !browser.chrome && !browser.operaTv) || browser.ps4;
 
     return browser;
 });

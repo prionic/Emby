@@ -5,7 +5,9 @@ using MediaBrowser.Model.Logging;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,11 +16,15 @@ namespace MediaBrowser.Server.Implementations.Persistence
     public class SqliteUserDataRepository : BaseSqliteRepository, IUserDataRepository
     {
         private IDbConnection _connection;
-        private readonly IApplicationPaths _appPaths;
 
-        public SqliteUserDataRepository(ILogManager logManager, IApplicationPaths appPaths) : base(logManager)
+        public SqliteUserDataRepository(ILogManager logManager, IApplicationPaths appPaths, IDbConnector connector) : base(logManager, connector)
         {
-            _appPaths = appPaths;
+            DbFilePath = Path.Combine(appPaths.DataPath, "userdata_v2.db");
+        }
+
+        protected override bool EnableConnectionPooling
+        {
+            get { return false; }
         }
 
         /// <summary>
@@ -33,21 +39,42 @@ namespace MediaBrowser.Server.Implementations.Persistence
             }
         }
 
+        protected override async Task<IDbConnection> CreateConnection(bool isReadOnly = false)
+        {
+            var connection = await DbConnector.Connect(DbFilePath, false, false, 10000).ConfigureAwait(false);
+
+            connection.RunQueries(new[]
+            {
+                "pragma temp_store = memory"
+
+            }, Logger);
+
+            return connection;
+        }
+
         /// <summary>
         /// Opens the connection to the database
         /// </summary>
         /// <returns>Task.</returns>
-        public async Task Initialize()
+        public async Task Initialize(IDbConnection connection, SemaphoreSlim writeLock)
         {
-            var dbFile = Path.Combine(_appPaths.DataPath, "userdata_v2.db");
-
-            _connection = await SqliteExtensions.ConnectToDb(dbFile, Logger).ConfigureAwait(false);
+            WriteLock.Dispose();
+            WriteLock = writeLock;
+            _connection = connection;
 
             string[] queries = {
 
-                                "create table if not exists userdata (key nvarchar, userId GUID, rating float null, played bit, playCount int, isFavorite bit, playbackPositionTicks bigint, lastPlayedDate datetime null)",
+                                "create table if not exists UserDataDb.userdata (key nvarchar, userId GUID, rating float null, played bit, playCount int, isFavorite bit, playbackPositionTicks bigint, lastPlayedDate datetime null)",
 
-                                "create unique index if not exists userdataindex on userdata (key, userId)",
+                                "drop index if exists UserDataDb.idx_userdata",
+                                "drop index if exists UserDataDb.idx_userdata1",
+                                "drop index if exists UserDataDb.idx_userdata2",
+                                "drop index if exists UserDataDb.userdataindex1",
+
+                                "create unique index if not exists UserDataDb.userdataindex on userdata (key, userId)",
+                                "create index if not exists UserDataDb.userdataindex2 on userdata (key, userId, played)",
+                                "create index if not exists UserDataDb.userdataindex3 on userdata (key, userId, playbackPositionTicks)",
+                                "create index if not exists UserDataDb.userdataindex4 on userdata (key, userId, isFavorite)",
 
                                 //pragmas
                                 "pragma temp_store = memory",
@@ -56,6 +83,9 @@ namespace MediaBrowser.Server.Implementations.Persistence
                                };
 
             _connection.RunQueries(queries, Logger);
+
+            _connection.AddColumn(Logger, "userdata", "AudioStreamIndex", "int");
+            _connection.AddColumn(Logger, "userdata", "SubtitleStreamIndex", "int");
         }
 
         /// <summary>
@@ -127,7 +157,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
 
                 using (var cmd = _connection.CreateCommand())
                 {
-                    cmd.CommandText = "replace into userdata (key, userId, rating,played,playCount,isFavorite,playbackPositionTicks,lastPlayedDate) values (@key, @userId, @rating,@played,@playCount,@isFavorite,@playbackPositionTicks,@lastPlayedDate)";
+                    cmd.CommandText = "replace into userdata (key, userId, rating,played,playCount,isFavorite,playbackPositionTicks,lastPlayedDate,AudioStreamIndex,SubtitleStreamIndex) values (@key, @userId, @rating,@played,@playCount,@isFavorite,@playbackPositionTicks,@lastPlayedDate,@AudioStreamIndex,@SubtitleStreamIndex)";
 
                     cmd.Parameters.Add(cmd, "@key", DbType.String).Value = key;
                     cmd.Parameters.Add(cmd, "@userId", DbType.Guid).Value = userId;
@@ -137,6 +167,8 @@ namespace MediaBrowser.Server.Implementations.Persistence
                     cmd.Parameters.Add(cmd, "@isFavorite", DbType.Boolean).Value = userData.IsFavorite;
                     cmd.Parameters.Add(cmd, "@playbackPositionTicks", DbType.Int64).Value = userData.PlaybackPositionTicks;
                     cmd.Parameters.Add(cmd, "@lastPlayedDate", DbType.DateTime).Value = userData.LastPlayedDate;
+                    cmd.Parameters.Add(cmd, "@AudioStreamIndex", DbType.Int32).Value = userData.AudioStreamIndex;
+                    cmd.Parameters.Add(cmd, "@SubtitleStreamIndex", DbType.Int32).Value = userData.SubtitleStreamIndex;
 
                     cmd.Transaction = transaction;
 
@@ -199,7 +231,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
                 {
                     using (var cmd = _connection.CreateCommand())
                     {
-                        cmd.CommandText = "replace into userdata (key, userId, rating,played,playCount,isFavorite,playbackPositionTicks,lastPlayedDate) values (@key, @userId, @rating,@played,@playCount,@isFavorite,@playbackPositionTicks,@lastPlayedDate)";
+                        cmd.CommandText = "replace into userdata (key, userId, rating,played,playCount,isFavorite,playbackPositionTicks,lastPlayedDate,AudioStreamIndex,SubtitleStreamIndex) values (@key, @userId, @rating,@played,@playCount,@isFavorite,@playbackPositionTicks,@lastPlayedDate,@AudioStreamIndex,@SubtitleStreamIndex)";
 
                         cmd.Parameters.Add(cmd, "@key", DbType.String).Value = userItemData.Key;
                         cmd.Parameters.Add(cmd, "@userId", DbType.Guid).Value = userId;
@@ -209,6 +241,8 @@ namespace MediaBrowser.Server.Implementations.Persistence
                         cmd.Parameters.Add(cmd, "@isFavorite", DbType.Boolean).Value = userItemData.IsFavorite;
                         cmd.Parameters.Add(cmd, "@playbackPositionTicks", DbType.Int64).Value = userItemData.PlaybackPositionTicks;
                         cmd.Parameters.Add(cmd, "@lastPlayedDate", DbType.DateTime).Value = userItemData.LastPlayedDate;
+                        cmd.Parameters.Add(cmd, "@AudioStreamIndex", DbType.Int32).Value = userItemData.AudioStreamIndex;
+                        cmd.Parameters.Add(cmd, "@SubtitleStreamIndex", DbType.Int32).Value = userItemData.SubtitleStreamIndex;
 
                         cmd.Transaction = transaction;
 
@@ -275,7 +309,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
 
             using (var cmd = _connection.CreateCommand())
             {
-                cmd.CommandText = "select key,userid,rating,played,playCount,isFavorite,playbackPositionTicks,lastPlayedDate from userdata where key = @key and userId=@userId";
+                cmd.CommandText = "select key,userid,rating,played,playCount,isFavorite,playbackPositionTicks,lastPlayedDate,AudioStreamIndex,SubtitleStreamIndex from userdata where key = @key and userId=@userId";
 
                 cmd.Parameters.Add(cmd, "@key", DbType.String).Value = key;
                 cmd.Parameters.Add(cmd, "@userId", DbType.Guid).Value = userId;
@@ -288,11 +322,54 @@ namespace MediaBrowser.Server.Implementations.Persistence
                     }
                 }
 
-                return new UserItemData
+                return null;
+            }
+        }
+
+        public UserItemData GetUserData(Guid userId, List<string> keys)
+        {
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentNullException("userId");
+            }
+            if (keys == null)
+            {
+                throw new ArgumentNullException("keys");
+            }
+
+            using (var cmd = _connection.CreateCommand())
+            {
+                var index = 0;
+                var userdataKeys = new List<string>();
+                var builder = new StringBuilder();
+                foreach (var key in keys)
                 {
-                    UserId = userId,
-                    Key = key
-                };
+                    var paramName = "@Key" + index;
+                    userdataKeys.Add("Key =" + paramName);
+                    cmd.Parameters.Add(cmd, paramName, DbType.String).Value = key;
+                    builder.Append(" WHEN Key=" + paramName + " THEN " + index);
+                    index++;
+                    break;
+                }
+
+                var keyText = string.Join(" OR ", userdataKeys.ToArray());
+
+                cmd.CommandText = "select key,userid,rating,played,playCount,isFavorite,playbackPositionTicks,lastPlayedDate,AudioStreamIndex,SubtitleStreamIndex from userdata where userId=@userId AND (" + keyText + ") ";
+
+                cmd.CommandText += " ORDER BY (Case " + builder + " Else " + keys.Count.ToString(CultureInfo.InvariantCulture) + " End )";
+                cmd.CommandText += " LIMIT 1";
+
+                cmd.Parameters.Add(cmd, "@userId", DbType.Guid).Value = userId;
+
+                using (var reader = cmd.ExecuteReader(CommandBehavior.SequentialAccess | CommandBehavior.SingleResult | CommandBehavior.SingleRow))
+                {
+                    if (reader.Read())
+                    {
+                        return ReadRow(reader);
+                    }
+                }
+
+                return null;
             }
         }
 
@@ -310,7 +387,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
 
             using (var cmd = _connection.CreateCommand())
             {
-                cmd.CommandText = "select key,userid,rating,played,playCount,isFavorite,playbackPositionTicks,lastPlayedDate from userdata where userId=@userId";
+                cmd.CommandText = "select key,userid,rating,played,playCount,isFavorite,playbackPositionTicks,lastPlayedDate,AudioStreamIndex,SubtitleStreamIndex from userdata where userId=@userId";
 
                 cmd.Parameters.Add(cmd, "@userId", DbType.Guid).Value = userId;
 
@@ -350,21 +427,27 @@ namespace MediaBrowser.Server.Implementations.Persistence
                 userData.LastPlayedDate = reader.GetDateTime(7).ToUniversalTime();
             }
 
+            if (!reader.IsDBNull(8))
+            {
+                userData.AudioStreamIndex = reader.GetInt32(8);
+            }
+
+            if (!reader.IsDBNull(9))
+            {
+                userData.SubtitleStreamIndex = reader.GetInt32(9);
+            }
+
             return userData;
+        }
+
+        protected override void Dispose(bool dispose)
+        {
+            // handled by library database
         }
 
         protected override void CloseConnection()
         {
-            if (_connection != null)
-            {
-                if (_connection.IsOpen())
-                {
-                    _connection.Close();
-                }
-
-                _connection.Dispose();
-                _connection = null;
-            }
+            // handled by library database
         }
     }
 }

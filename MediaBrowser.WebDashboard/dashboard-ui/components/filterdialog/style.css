@@ -36,8 +36,3 @@
         left: 50% !important;
     }
 }
-
-.filterDialog paper-radio-button {
-    display: block;
-    padding-left: 0;
-}

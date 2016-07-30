@@ -1,4 +1,4 @@
-﻿define(['events', 'appStorage'], function (Events, appStorage) {
+﻿define(['events', 'appStorage'], function (events, appStorage) {
 
     return function (key) {
 
@@ -33,7 +33,7 @@
                 self.clear();
             }
 
-            Events.trigger(self, 'credentialsupdated');
+            events.trigger(self, 'credentialsupdated');
         }
 
         self.clear = function () {
@@ -95,7 +95,6 @@
                 if (server.ConnectServerId) {
                     existing.ConnectServerId = server.ConnectServerId;
                 }
-                existing.DateLastLocalConnection = Math.max(existing.DateLastLocalConnection || 0, server.DateLastLocalConnection || 0);
 
                 return existing;
             }

@@ -1,4 +1,4 @@
-﻿(function ($, document, Dashboard) {
+﻿define(['libraryBrowser'], function (libraryBrowser) {
 
     function notifications() {
 
@@ -39,10 +39,17 @@
 
             promise.then(function (summary) {
 
-                var item = $('.btnNotificationsInner').removeClass('levelNormal').removeClass('levelWarning').removeClass('levelError').html(summary.UnreadCount);
+                var btnNotificationsInner = document.querySelector('.btnNotificationsInner');
+                if (btnNotificationsInner) {
 
-                if (summary.UnreadCount) {
-                    item.addClass('level' + summary.MaxUnreadNotificationLevel);
+                    btnNotificationsInner.classList.remove('levelNormal');
+                    btnNotificationsInner.classList.remove('levelWarning');
+                    btnNotificationsInner.classList.remove('levelError');
+                    btnNotificationsInner.innerHTML = summary.UnreadCount;
+
+                    if (summary.UnreadCount) {
+                        btnNotificationsInner.classList.add('level' + summary.MaxUnreadNotificationLevel);
+                    }
                 }
             });
         };
@@ -99,7 +106,7 @@
 
             var query = { StartIndex: startIndex, Limit: limit };
 
-            html += LibraryBrowser.getQueryPagingHtml({
+            html += libraryBrowser.getQueryPagingHtml({
                 startIndex: query.StartIndex,
                 limit: query.Limit,
                 totalRecordCount: totalRecordCount,
@@ -205,4 +212,4 @@
 
     });
 
-})(jQuery, document, Dashboard);
+});

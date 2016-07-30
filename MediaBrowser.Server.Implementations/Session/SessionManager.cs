@@ -404,6 +404,10 @@ namespace MediaBrowser.Server.Implementations.Session
         /// <returns>SessionInfo.</returns>
         private async Task<SessionInfo> GetSessionInfo(string appName, string appVersion, string deviceId, string deviceName, string remoteEndPoint, User user)
         {
+            if (string.IsNullOrWhiteSpace(deviceId))
+            {
+                throw new ArgumentNullException("deviceId");
+            }
             var key = GetSessionKey(appName, deviceId);
 
             await _sessionLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -547,9 +551,9 @@ namespace MediaBrowser.Server.Implementations.Session
                         await OnPlaybackStopped(new PlaybackStopInfo
                         {
                             Item = session.NowPlayingItem,
-                            ItemId = (session.NowPlayingItem == null ? null : session.NowPlayingItem.Id),
+                            ItemId = session.NowPlayingItem == null ? null : session.NowPlayingItem.Id,
                             SessionId = session.Id,
-                            MediaSourceId = (session.PlayState == null ? null : session.PlayState.MediaSourceId),
+                            MediaSourceId = session.PlayState == null ? null : session.PlayState.MediaSourceId,
                             PositionTicks = session.PlayState == null ? null : session.PlayState.PositionTicks
                         });
                     }
@@ -601,11 +605,9 @@ namespace MediaBrowser.Server.Implementations.Session
 
             if (libraryItem != null)
             {
-                var key = libraryItem.GetUserDataKey();
-
                 foreach (var user in users)
                 {
-                    await OnPlaybackStart(user.Id, key, libraryItem).ConfigureAwait(false);
+                    await OnPlaybackStart(user.Id, libraryItem).ConfigureAwait(false);
                 }
             }
 
@@ -632,12 +634,11 @@ namespace MediaBrowser.Server.Implementations.Session
         /// Called when [playback start].
         /// </summary>
         /// <param name="userId">The user identifier.</param>
-        /// <param name="userDataKey">The user data key.</param>
         /// <param name="item">The item.</param>
         /// <returns>Task.</returns>
-        private async Task OnPlaybackStart(Guid userId, string userDataKey, IHasUserData item)
+        private async Task OnPlaybackStart(Guid userId, IHasUserData item)
         {
-            var data = _userDataRepository.GetUserData(userId, userDataKey);
+            var data = _userDataRepository.GetUserData(userId, item);
 
             data.PlayCount++;
             data.LastPlayedDate = DateTime.UtcNow;
@@ -676,11 +677,9 @@ namespace MediaBrowser.Server.Implementations.Session
 
             if (libraryItem != null)
             {
-                var key = libraryItem.GetUserDataKey();
-
                 foreach (var user in users)
                 {
-                    await OnPlaybackProgress(user.Id, key, libraryItem, info.PositionTicks).ConfigureAwait(false);
+                    await OnPlaybackProgress(user, libraryItem, info).ConfigureAwait(false);
                 }
             }
 
@@ -705,22 +704,49 @@ namespace MediaBrowser.Server.Implementations.Session
                 MediaInfo = info.Item,
                 DeviceName = session.DeviceName,
                 ClientName = session.Client,
-                DeviceId = session.DeviceId
+                DeviceId = session.DeviceId,
+                IsPaused = info.IsPaused,
+                PlaySessionId = info.PlaySessionId
 
             }, _logger);
 
             StartIdleCheckTimer();
         }
 
-        private async Task OnPlaybackProgress(Guid userId, string userDataKey, BaseItem item, long? positionTicks)
+        private async Task OnPlaybackProgress(User user, BaseItem item, PlaybackProgressInfo info)
         {
-            var data = _userDataRepository.GetUserData(userId, userDataKey);
+            var data = _userDataRepository.GetUserData(user.Id, item);
+
+            var positionTicks = info.PositionTicks;
 
             if (positionTicks.HasValue)
             {
                 _userDataRepository.UpdatePlayState(item, data, positionTicks.Value);
 
-                await _userDataRepository.SaveUserData(userId, item, data, UserDataSaveReason.PlaybackProgress, CancellationToken.None).ConfigureAwait(false);
+                UpdatePlaybackSettings(user, info, data);
+
+                await _userDataRepository.SaveUserData(user.Id, item, data, UserDataSaveReason.PlaybackProgress, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+
+        private void UpdatePlaybackSettings(User user, PlaybackProgressInfo info, UserItemData data)
+        {
+            if (user.Configuration.RememberAudioSelections)
+            {
+                data.AudioStreamIndex = info.AudioStreamIndex;
+            }
+            else
+            {
+                data.AudioStreamIndex = null;
+            }
+
+            if (user.Configuration.RememberSubtitleSelections)
+            {
+                data.SubtitleStreamIndex = info.SubtitleStreamIndex;
+            }
+            else
+            {
+                data.SubtitleStreamIndex = null;
             }
         }
 
@@ -784,11 +810,9 @@ namespace MediaBrowser.Server.Implementations.Session
 
             if (libraryItem != null)
             {
-                var key = libraryItem.GetUserDataKey();
-
                 foreach (var user in users)
                 {
-                    playedToCompletion = await OnPlaybackStopped(user.Id, key, libraryItem, info.PositionTicks).ConfigureAwait(false);
+                    playedToCompletion = await OnPlaybackStopped(user.Id, libraryItem, info.PositionTicks, info.Failed).ConfigureAwait(false);
                 }
             }
 
@@ -821,25 +845,29 @@ namespace MediaBrowser.Server.Implementations.Session
             await SendPlaybackStoppedNotification(session, CancellationToken.None).ConfigureAwait(false);
         }
 
-        private async Task<bool> OnPlaybackStopped(Guid userId, string userDataKey, BaseItem item, long? positionTicks)
+        private async Task<bool> OnPlaybackStopped(Guid userId, BaseItem item, long? positionTicks, bool playbackFailed)
         {
-            var data = _userDataRepository.GetUserData(userId, userDataKey);
-            bool playedToCompletion;
+            bool playedToCompletion = false;
 
-            if (positionTicks.HasValue)
+            if (!playbackFailed)
             {
-                playedToCompletion = _userDataRepository.UpdatePlayState(item, data, positionTicks.Value);
-            }
-            else
-            {
-                // If the client isn't able to report this, then we'll just have to make an assumption
-                data.PlayCount++;
-                data.Played = true;
-                data.PlaybackPositionTicks = 0;
-                playedToCompletion = true;
-            }
+                var data = _userDataRepository.GetUserData(userId, item);
 
-            await _userDataRepository.SaveUserData(userId, item, data, UserDataSaveReason.PlaybackFinished, CancellationToken.None).ConfigureAwait(false);
+                if (positionTicks.HasValue)
+                {
+                    playedToCompletion = _userDataRepository.UpdatePlayState(item, data, positionTicks.Value);
+                }
+                else
+                {
+                    // If the client isn't able to report this, then we'll just have to make an assumption
+                    data.PlayCount++;
+                    data.Played = true;
+                    data.PlaybackPositionTicks = 0;
+                    playedToCompletion = true;
+                }
+
+                await _userDataRepository.SaveUserData(userId, item, data, UserDataSaveReason.PlaybackFinished, CancellationToken.None).ConfigureAwait(false);
+            }
 
             return playedToCompletion;
         }
@@ -904,7 +932,7 @@ namespace MediaBrowser.Server.Implementations.Session
             return session.SessionController.SendGeneralCommand(command, cancellationToken);
         }
 
-        public Task SendPlayCommand(string controllingSessionId, string sessionId, PlayRequest command, CancellationToken cancellationToken)
+        public async Task SendPlayCommand(string controllingSessionId, string sessionId, PlayRequest command, CancellationToken cancellationToken)
         {
             var session = GetSessionToRemoteControl(sessionId);
 
@@ -922,7 +950,14 @@ namespace MediaBrowser.Server.Implementations.Session
             }
             else
             {
-                items = command.ItemIds.SelectMany(i => TranslateItemForPlayback(i, user))
+                var list = new List<BaseItem>();
+                foreach (var itemId in command.ItemIds)
+                {
+                    var subItems = await TranslateItemForPlayback(itemId, user).ConfigureAwait(false);
+                    list.AddRange(subItems);
+                }
+                
+                items = list
                    .Where(i => i.LocationType != LocationType.Virtual)
                    .ToList();
             }
@@ -958,6 +993,26 @@ namespace MediaBrowser.Server.Implementations.Session
                 }
             }
 
+            if (user != null && command.ItemIds.Length == 1 && user.Configuration.EnableNextEpisodeAutoPlay)
+            {
+                var episode = _libraryManager.GetItemById(command.ItemIds[0]) as Episode;
+                if (episode != null)
+                {
+                    var series = episode.Series;
+                    if (series != null)
+                    {
+                        var episodes = series.GetEpisodes(user, false, false)
+                            .SkipWhile(i => i.Id != episode.Id)
+                            .ToList();
+
+                        if (episodes.Count > 0)
+                        {
+                            command.ItemIds = episodes.Select(i => i.Id.ToString("N")).ToArray();
+                        }
+                    }
+                }
+            }
+
             var controllingSession = GetSession(controllingSessionId);
             AssertCanControl(session, controllingSession);
             if (controllingSession.UserId.HasValue)
@@ -965,10 +1020,10 @@ namespace MediaBrowser.Server.Implementations.Session
                 command.ControllingUserId = controllingSession.UserId.Value.ToString("N");
             }
 
-            return session.SessionController.SendPlayCommand(command, cancellationToken);
+            await session.SessionController.SendPlayCommand(command, cancellationToken).ConfigureAwait(false);
         }
 
-        private IEnumerable<BaseItem> TranslateItemForPlayback(string id, User user)
+        private async Task<List<BaseItem>> TranslateItemForPlayback(string id, User user)
         {
             var item = _libraryManager.GetItemById(id);
 
@@ -982,29 +1037,34 @@ namespace MediaBrowser.Server.Implementations.Session
 
             if (byName != null)
             {
-                var itemFilter = byName.GetItemFilter();
-
-                var items = user == null ?
-                    _libraryManager.RootFolder.GetRecursiveChildren(i => !i.IsFolder && itemFilter(i)) :
-                    user.RootFolder.GetRecursiveChildren(user, i => !i.IsFolder && itemFilter(i));
+                var items = byName.GetTaggedItems(new InternalItemsQuery(user)
+                {
+                    IsFolder = false,
+                    Recursive = true
+                });
 
                 return FilterToSingleMediaType(items)
-                    .OrderBy(i => i.SortName);
+                    .OrderBy(i => i.SortName)
+                    .ToList();
             }
 
             if (item.IsFolder)
             {
                 var folder = (Folder)item;
 
-                var items = user == null ?
-                    folder.GetRecursiveChildren(i => !i.IsFolder) :
-                    folder.GetRecursiveChildren(user, i => !i.IsFolder);
+                var itemsResult = await folder.GetItems(new InternalItemsQuery(user)
+                {
+                    Recursive = true,
+                    IsFolder = false
 
-                return FilterToSingleMediaType(items)
-                    .OrderBy(i => i.SortName);
+                }).ConfigureAwait(false);
+
+                return FilterToSingleMediaType(itemsResult.Items)
+                    .OrderBy(i => i.SortName)
+                    .ToList();
             }
 
-            return new[] { item };
+            return new List<BaseItem> { item };
         }
 
         private IEnumerable<BaseItem> FilterToSingleMediaType(IEnumerable<BaseItem> items)
@@ -1074,11 +1134,11 @@ namespace MediaBrowser.Server.Implementations.Session
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>Task.</returns>
-        public Task SendRestartRequiredNotification(CancellationToken cancellationToken)
+        public async Task SendRestartRequiredNotification(CancellationToken cancellationToken)
         {
             var sessions = Sessions.Where(i => i.IsActive && i.SessionController != null).ToList();
 
-            var info = _appHost.GetSystemInfo();
+            var info = await _appHost.GetSystemInfo().ConfigureAwait(false);
 
             var tasks = sessions.Select(session => Task.Run(async () =>
             {
@@ -1093,7 +1153,7 @@ namespace MediaBrowser.Server.Implementations.Session
 
             }, cancellationToken));
 
-            return Task.WhenAll(tasks);
+            await Task.WhenAll(tasks).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -1268,7 +1328,17 @@ namespace MediaBrowser.Server.Implementations.Session
         /// </summary>
         /// <param name="request">The request.</param>
         /// <returns>Task{SessionInfo}.</returns>
-        public async Task<AuthenticationResult> AuthenticateNewSession(AuthenticationRequest request)
+        public Task<AuthenticationResult> AuthenticateNewSession(AuthenticationRequest request)
+        {
+            return AuthenticateNewSessionInternal(request, true);
+        }
+
+        public Task<AuthenticationResult> CreateNewSession(AuthenticationRequest request)
+        {
+            return AuthenticateNewSessionInternal(request, false);
+        }
+
+        private async Task<AuthenticationResult> AuthenticateNewSessionInternal(AuthenticationRequest request, bool enforcePassword)
         {
             var user = _userManager.Users
                 .FirstOrDefault(i => string.Equals(request.Username, i.Name, StringComparison.OrdinalIgnoreCase));
@@ -1281,13 +1351,16 @@ namespace MediaBrowser.Server.Implementations.Session
                 }
             }
 
-            var result = await _userManager.AuthenticateUser(request.Username, request.PasswordSha1, request.PasswordMd5, request.RemoteEndPoint).ConfigureAwait(false);
-
-            if (!result)
+            if (enforcePassword)
             {
-                EventHelper.FireEventIfNotNull(AuthenticationFailed, this, new GenericEventArgs<AuthenticationRequest>(request), _logger);
+                var result = await _userManager.AuthenticateUser(request.Username, request.PasswordSha1, request.PasswordMd5, request.RemoteEndPoint).ConfigureAwait(false);
 
-                throw new SecurityException("Invalid user or password entered.");
+                if (!result)
+                {
+                    EventHelper.FireEventIfNotNull(AuthenticationFailed, this, new GenericEventArgs<AuthenticationRequest>(request), _logger);
+
+                    throw new SecurityException("Invalid user or password entered.");
+                }
             }
 
             var token = await GetAuthorizationToken(user.Id.ToString("N"), request.DeviceId, request.App, request.AppVersion, request.DeviceName).ConfigureAwait(false);
@@ -1310,6 +1383,7 @@ namespace MediaBrowser.Server.Implementations.Session
                 ServerId = _appHost.SystemId
             };
         }
+
 
         private async Task<string> GetAuthorizationToken(string userId, string deviceId, string app, string appVersion, string deviceName)
         {
@@ -1386,7 +1460,7 @@ namespace MediaBrowser.Server.Implementations.Session
             }
         }
 
-        public async Task RevokeUserTokens(string userId)
+        public async Task RevokeUserTokens(string userId, string currentAccessToken)
         {
             var existing = _authRepo.Get(new AuthenticationInfoQuery
             {
@@ -1396,7 +1470,10 @@ namespace MediaBrowser.Server.Implementations.Session
 
             foreach (var info in existing.Items)
             {
-                await Logout(info.AccessToken).ConfigureAwait(false);
+                if (!string.Equals(currentAccessToken, info.AccessToken, StringComparison.OrdinalIgnoreCase))
+                {
+                    await Logout(info.AccessToken).ConfigureAwait(false);
+                }
             }
         }
 
@@ -1687,6 +1764,11 @@ namespace MediaBrowser.Server.Implementations.Session
 
         public void ReportNowViewingItem(string sessionId, string itemId)
         {
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                throw new ArgumentNullException("itemId");
+            }
+
             var item = _libraryManager.GetItemById(new Guid(itemId));
 
             var info = GetItemInfo(item, null, null);

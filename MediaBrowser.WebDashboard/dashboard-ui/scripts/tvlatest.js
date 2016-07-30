@@ -1,35 +1,34 @@
-﻿(function ($, document) {
+﻿define(['components/categorysyncbuttons', 'components/groupedcards'], function (categorysyncbuttons, groupedcards) {
 
     function getView() {
 
         return 'Thumb';
     }
 
-    function loadLatest(page) {
+    function getLatestPromise(context, params) {
 
         Dashboard.showLoadingMsg();
 
         var userId = Dashboard.getCurrentUserId();
 
-        var parentId = LibraryMenu.getTopParentId();
-
-        var limit = 30;
-
-        if (AppInfo.hasLowImageBandwidth) {
-            limit = 16;
-        }
+        var parentId = params.topParentId;
 
         var options = {
 
             IncludeItemTypes: "Episode",
-            Limit: limit,
+            Limit: 30,
             Fields: "PrimaryImageAspectRatio,SyncInfo",
             ParentId: parentId,
             ImageTypeLimit: 1,
-            EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
+            EnableImageTypes: "Primary,Backdrop,Thumb"
         };
 
-        ApiClient.getJSON(ApiClient.getUrl('Users/' + userId + '/Items/Latest', options)).then(function (items) {
+        return ApiClient.getJSON(ApiClient.getUrl('Users/' + userId + '/Items/Latest', options));
+    }
+
+    function loadLatest(context, params, promise) {
+
+        promise.then(function (items) {
 
             var view = getView();
             var html = '';
@@ -68,20 +67,28 @@
                 });
             }
 
-            var elem = page.querySelector('#latestEpisodes');
+            var elem = context.querySelector('#latestEpisodes');
             elem.innerHTML = html;
             ImageLoader.lazyChildren(elem);
 
             Dashboard.hideLoadingMsg();
-            LibraryBrowser.setLastRefreshed(page);
         });
     }
+    return function (view, params, tabContent) {
 
-    window.TvPage.renderLatestTab = function (page, tabContent) {
+        var self = this;
 
-        if (LibraryBrowser.needsRefresh(tabContent)) {
-            loadLatest(tabContent);
-        }
+        categorysyncbuttons.init(tabContent);        var latestPromise;
+
+        self.preRender = function () {
+            latestPromise = getLatestPromise(view, params);
+        };
+
+        self.renderTab = function () {
+
+            loadLatest(tabContent, params, latestPromise);
+        };
+
+        tabContent.querySelector('#latestEpisodes').addEventListener('click', groupedcards.onItemsContainerClick);
     };
-
-})(jQuery, document);
+});

@@ -11,12 +11,11 @@ using MediaBrowser.Model.Serialization;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
-using MediaBrowser.Common.IO;
+using MediaBrowser.Model.Configuration;
 
 namespace MediaBrowser.Server.Implementations.Library
 {
@@ -30,8 +29,9 @@ namespace MediaBrowser.Server.Implementations.Library
 
         private IMediaSourceProvider[] _providers;
         private readonly ILogger _logger;
+        private readonly IUserDataManager _userDataManager;
 
-        public MediaSourceManager(IItemRepository itemRepo, IUserManager userManager, ILibraryManager libraryManager, ILogger logger, IJsonSerializer jsonSerializer, IFileSystem fileSystem)
+        public MediaSourceManager(IItemRepository itemRepo, IUserManager userManager, ILibraryManager libraryManager, ILogger logger, IJsonSerializer jsonSerializer, IFileSystem fileSystem, IUserDataManager userDataManager)
         {
             _itemRepo = itemRepo;
             _userManager = userManager;
@@ -39,6 +39,7 @@ namespace MediaBrowser.Server.Implementations.Library
             _logger = logger;
             _jsonSerializer = jsonSerializer;
             _fileSystem = fileSystem;
+            _userDataManager = userDataManager;
         }
 
         public void AddParts(IEnumerable<IMediaSourceProvider> providers)
@@ -68,10 +69,6 @@ namespace MediaBrowser.Server.Implementations.Library
 
             if (stream.IsTextSubtitleStream)
             {
-                if (string.Equals(stream.Codec, "ass", StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
                 return true;
             }
 
@@ -140,7 +137,7 @@ namespace MediaBrowser.Server.Implementations.Library
             {
                 if (user != null)
                 {
-                    SetUserProperties(source, user);
+                    SetUserProperties(hasMediaSources, source, user);
                 }
                 if (source.Protocol == MediaProtocol.File)
                 {
@@ -170,13 +167,6 @@ namespace MediaBrowser.Server.Implementations.Library
                     if (string.Equals(item.MediaType, MediaType.Audio, StringComparison.OrdinalIgnoreCase))
                     {
                         if (!user.Policy.EnableAudioPlaybackTranscoding)
-                        {
-                            source.SupportsTranscoding = false;
-                        }
-                    }
-                    else if (string.Equals(item.MediaType, MediaType.Video, StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (!user.Policy.EnableVideoPlaybackTranscoding)
                         {
                             source.SupportsTranscoding = false;
                         }
@@ -257,24 +247,39 @@ namespace MediaBrowser.Server.Implementations.Library
             {
                 foreach (var source in sources)
                 {
-                    SetUserProperties(source, user);
+                    SetUserProperties(item, source, user);
                 }
             }
 
             return sources;
         }
 
-        private void SetUserProperties(MediaSourceInfo source, User user)
+        private void SetUserProperties(IHasUserData item, MediaSourceInfo source, User user)
         {
-            var preferredAudio = string.IsNullOrEmpty(user.Configuration.AudioLanguagePreference)
-            ? new string[] { }
-            : new[] { user.Configuration.AudioLanguagePreference };
+            var userData = item == null ? new UserItemData() : _userDataManager.GetUserData(user, item);
 
+            var allowRememberingSelection = item == null || item.EnableRememberingTrackSelections;
+
+            SetDefaultAudioStreamIndex(source, userData, user, allowRememberingSelection);
+            SetDefaultSubtitleStreamIndex(source, userData, user, allowRememberingSelection);
+        }
+
+        private void SetDefaultSubtitleStreamIndex(MediaSourceInfo source, UserItemData userData, User user, bool allowRememberingSelection)
+        {
+            if (userData.SubtitleStreamIndex.HasValue && user.Configuration.RememberSubtitleSelections && user.Configuration.SubtitleMode != SubtitlePlaybackMode.None && allowRememberingSelection)
+            {
+                var index = userData.SubtitleStreamIndex.Value;
+                // Make sure the saved index is still valid
+                if (index == -1 || source.MediaStreams.Any(i => i.Type == MediaStreamType.Subtitle && i.Index == index))
+                {
+                    source.DefaultSubtitleStreamIndex = index;
+                    return;
+                }
+            }
+            
             var preferredSubs = string.IsNullOrEmpty(user.Configuration.SubtitleLanguagePreference)
                 ? new List<string> { }
                 : new List<string> { user.Configuration.SubtitleLanguagePreference };
-
-            source.DefaultAudioStreamIndex = MediaStreamSelector.GetDefaultAudioStreamIndex(source.MediaStreams, preferredAudio, user.Configuration.PlayDefaultAudioTrack);
 
             var defaultAudioIndex = source.DefaultAudioStreamIndex;
             var audioLangage = defaultAudioIndex == null
@@ -288,6 +293,26 @@ namespace MediaBrowser.Server.Implementations.Library
 
             MediaStreamSelector.SetSubtitleStreamScores(source.MediaStreams, preferredSubs,
                 user.Configuration.SubtitleMode, audioLangage);
+        }
+
+        private void SetDefaultAudioStreamIndex(MediaSourceInfo source, UserItemData userData, User user, bool allowRememberingSelection)
+        {
+            if (userData.AudioStreamIndex.HasValue && user.Configuration.RememberAudioSelections && allowRememberingSelection)
+            {
+                var index = userData.AudioStreamIndex.Value;
+                // Make sure the saved index is still valid
+                if (source.MediaStreams.Any(i => i.Type == MediaStreamType.Audio && i.Index == index))
+                {
+                    source.DefaultAudioStreamIndex = index;
+                    return;
+                }
+            }
+
+            var preferredAudio = string.IsNullOrEmpty(user.Configuration.AudioLanguagePreference)
+                ? new string[] { }
+                : new[] { user.Configuration.AudioLanguagePreference };
+
+            source.DefaultAudioStreamIndex = MediaStreamSelector.GetDefaultAudioStreamIndex(source.MediaStreams, preferredAudio, user.Configuration.PlayDefaultAudioTrack);
         }
 
         private IEnumerable<MediaSourceInfo> SortMediaSources(IEnumerable<MediaSourceInfo> sources)
@@ -349,11 +374,14 @@ namespace MediaBrowser.Server.Implementations.Library
                 var json = _jsonSerializer.SerializeToString(mediaSource);
                 _logger.Debug("Live stream opened: " + json);
                 var clone = _jsonSerializer.DeserializeFromString<MediaSourceInfo>(json);
-
+               
                 if (!string.IsNullOrWhiteSpace(request.UserId))
                 {
                     var user = _userManager.GetUserById(request.UserId);
-                    SetUserProperties(clone, user);
+                    var item = string.IsNullOrWhiteSpace(request.ItemId)
+                        ? null
+                        : _libraryManager.GetItemById(request.ItemId);
+                    SetUserProperties(item, clone, user);
                 }
 
                 return new LiveStreamResponse
@@ -418,8 +446,31 @@ namespace MediaBrowser.Server.Implementations.Library
             }
         }
 
+        private async Task CloseLiveStreamWithProvider(IMediaSourceProvider provider, string streamId, CancellationToken cancellationToken)
+        {
+            _logger.Info("Closing live stream {0} with provider {1}", streamId, provider.GetType().Name);
+
+            try
+            {
+                await provider.CloseMediaSource(streamId, cancellationToken).ConfigureAwait(false);
+            }
+            catch (NotImplementedException)
+            {
+
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("Error closing live stream {0}", ex, streamId);
+            }
+        }
+
         public async Task CloseLiveStream(string id, CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentNullException("id");
+            }
+
             await _liveStreamSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             try
@@ -431,7 +482,7 @@ namespace MediaBrowser.Server.Implementations.Library
                     {
                         var tuple = GetProvider(id);
 
-                        await tuple.Item1.CloseMediaSource(tuple.Item2, cancellationToken).ConfigureAwait(false);
+                        await CloseLiveStreamWithProvider(tuple.Item1, tuple.Item2, cancellationToken).ConfigureAwait(false);
                     }
                 }
 
@@ -497,7 +548,7 @@ namespace MediaBrowser.Server.Implementations.Library
         {
             var infos = _openStreams
                 .Values
-                .Where(i => i.EnableCloseTimer && (DateTime.UtcNow - i.Date) > _openStreamMaxAge)
+                .Where(i => i.EnableCloseTimer && DateTime.UtcNow - i.Date > _openStreamMaxAge)
                 .ToList();
 
             foreach (var info in infos)

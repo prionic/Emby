@@ -1,16 +1,15 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Common.Net;
+﻿using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Devices;
 using MediaBrowser.Controller.Dlna;
 using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Serialization;
 using ServiceStack;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using CommonIO;
 
 namespace MediaBrowser.Api.Playback.Progressive
@@ -42,7 +41,7 @@ namespace MediaBrowser.Api.Playback.Progressive
         /// </summary>
         /// <param name="request">The request.</param>
         /// <returns>System.Object.</returns>
-        public object Get(GetAudioStream request)
+        public Task<object> Get(GetAudioStream request)
         {
             return ProcessRequest(request, false);
         }
@@ -52,7 +51,7 @@ namespace MediaBrowser.Api.Playback.Progressive
         /// </summary>
         /// <param name="request">The request.</param>
         /// <returns>System.Object.</returns>
-        public object Head(GetAudioStream request)
+        public Task<object> Head(GetAudioStream request)
         {
             return ProcessRequest(request, true);
         }
@@ -73,9 +72,13 @@ namespace MediaBrowser.Api.Playback.Progressive
                 audioTranscodeParams.Add("-ac " + state.OutputAudioChannels.Value.ToString(UsCulture));
             }
 
-            if (state.OutputAudioSampleRate.HasValue)
+            // opus will fail on 44100
+            if (!string.Equals(state.OutputAudioCodec, "opus", global::System.StringComparison.OrdinalIgnoreCase))
             {
-                audioTranscodeParams.Add("-ar " + state.OutputAudioSampleRate.Value.ToString(UsCulture));
+                if (state.OutputAudioSampleRate.HasValue)
+                {
+                    audioTranscodeParams.Add("-ar " + state.OutputAudioSampleRate.Value.ToString(UsCulture));
+                }
             }
 
             const string vn = " -vn";

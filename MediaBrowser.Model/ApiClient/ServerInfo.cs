@@ -12,6 +12,7 @@ namespace MediaBrowser.Model.ApiClient
         
         public String Name { get; set; }
         public String Id { get; set; }
+        public String ConnectServerId { get; set; }
         public String LocalAddress { get; set; }
         public String RemoteAddress { get; set; }
         public String ManualAddress { get; set; }
@@ -19,7 +20,6 @@ namespace MediaBrowser.Model.ApiClient
         public String AccessToken { get; set; }
         public List<WakeOnLanInfo> WakeOnLanInfos { get; set; }
         public DateTime DateLastAccessed { get; set; }
-        public DateTime DateLastLocalConnection { get; set; }
         public String ExchangeToken { get; set; }
         public UserLinkType? UserLinkType { get; set; }
         public ConnectionMode? LastConnectionMode { get; set; }

@@ -87,12 +87,15 @@ namespace MediaBrowser.Server.Implementations.Library
         {
             var searchTerm = query.SearchTerm;
 
+            if (searchTerm != null)
+            {
+                searchTerm = searchTerm.Trim().RemoveDiacritics();
+            }
+
             if (string.IsNullOrWhiteSpace(searchTerm))
             {
                 throw new ArgumentNullException("searchTerm");
             }
-
-            searchTerm = searchTerm.RemoveDiacritics();
 
             var terms = GetWords(searchTerm);
 
@@ -119,7 +122,7 @@ namespace MediaBrowser.Server.Implementations.Library
                 AddIfMissing(excludeItemTypes, typeof(MusicGenre).Name);
             }
 
-            if (query.IncludePeople && (includeItemTypes.Count == 0 || includeItemTypes.Contains("People", StringComparer.OrdinalIgnoreCase)))
+            if (query.IncludePeople && (includeItemTypes.Count == 0 || includeItemTypes.Contains("People", StringComparer.OrdinalIgnoreCase) || includeItemTypes.Contains("Person", StringComparer.OrdinalIgnoreCase)))
             {
                 if (!query.IncludeMedia)
                 {
@@ -157,7 +160,7 @@ namespace MediaBrowser.Server.Implementations.Library
 
             AddIfMissing(excludeItemTypes, typeof(CollectionFolder).Name);
 
-            var mediaItems = _libraryManager.GetItems(new InternalItemsQuery(user)
+            var mediaItems = _libraryManager.GetItemList(new InternalItemsQuery(user)
             {
                 NameContains = searchTerm,
                 ExcludeItemTypes = excludeItemTypes.ToArray(),
@@ -165,7 +168,7 @@ namespace MediaBrowser.Server.Implementations.Library
                 Limit = query.Limit,
                 IncludeItemsByName = true
 
-            }, new string[] { });
+            });
 
             // Add search hints based on item name
             hints.AddRange(mediaItems.Where(IncludeInSearch).Select(item =>

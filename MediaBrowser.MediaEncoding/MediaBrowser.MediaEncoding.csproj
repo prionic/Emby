@@ -41,7 +41,7 @@
     </Reference>
     <Reference Include="CommonIO, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\CommonIO.1.0.0.7\lib\net45\CommonIO.dll</HintPath>
+      <HintPath>..\packages\CommonIO.1.0.0.9\lib\net45\CommonIO.dll</HintPath>
     </Reference>
     <Reference Include="DvdLib">
       <HintPath>..\packages\MediaBrowser.BdInfo.1.0.0.10\lib\net35\DvdLib.dll</HintPath>
@@ -71,6 +71,8 @@
     <Compile Include="Encoder\EncodingJob.cs" />
     <Compile Include="Encoder\EncodingJobFactory.cs" />
     <Compile Include="Encoder\EncodingUtils.cs" />
+    <Compile Include="Encoder\EncoderValidator.cs" />
+    <Compile Include="Encoder\FontConfigLoader.cs" />
     <Compile Include="Encoder\JobLogger.cs" />
     <Compile Include="Encoder\MediaEncoder.cs" />
     <Compile Include="Encoder\VideoEncoder.cs" />
